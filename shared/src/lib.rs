@@ -33,8 +33,9 @@ pub const FLY_VERTICAL_SPEED: f32 = 100.0;
 // Player spawn position (shared between client and server)
 pub const DEFAULT_SPAWN_POSITION: Vec3 = Vec3::new(280., 500., -150.);
 
-// Re-export physics constants for convenience
-pub use physics::{GROUND_ACCELERATION, PLAYER_GRAVITY, PLAYER_JUMP_FORCE, PLAYER_QUERY_BOUNDS};
+// Note: Physics constants are available via shared::physics::{PLAYER_GRAVITY, PLAYER_JUMP_FORCE, etc.}
+// Re-export only the most commonly referenced query bounds for convenience
+pub use physics::PLAYER_QUERY_BOUNDS;
 
 // Error message constants
 pub const UNIX_EPOCH_TIME_ERROR: &str = "System time is before UNIX_EPOCH";

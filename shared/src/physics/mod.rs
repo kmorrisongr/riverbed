@@ -4,11 +4,24 @@
 //! by both client and server. The architecture is:
 //!
 //! - **Players**: `RigidBody::Dynamic` with capsule colliders
-//! - **Chunks**: `RigidBody::Static` with trimesh colliders
+//! - **Chunks**: `RigidBody::Static` with trimesh colliders (see `meshing::ChunkColliderPlugin`)
 //! - **Movement**: Custom kinematics (we compute velocity, avian3d resolves collisions)
 //!
-//! The server is authoritative for player positions. The client uses the same
-//! velocity computation for prediction.
+//! # Server-Authoritative Model
+//!
+//! The server is the single source of truth for player state:
+//! 1. Client captures inputs and sends to server
+//! 2. Client predicts movement locally using `apply_player_input_to_components()`
+//! 3. Server processes inputs using the same function for identical velocity calculation
+//! 4. Server broadcasts authoritative position updates
+//! 5. Client reconciles prediction with server state (see `client::network::reconciliation`)
+//!
+//! # Key Functions
+//!
+//! - [`apply_player_input_to_components`]: Applies input to ECS components (used by both client & server)
+//! - [`compute_desired_velocity`]: Pure function for velocity calculation
+//! - [`update_ground_state_system`]: Generic system for ground detection via avian3d contacts
+//! - [`update_stepped_block_system`]: Generic system for detecting which block player stands on
 
 pub mod avian_physics;
 pub mod ground_detection;

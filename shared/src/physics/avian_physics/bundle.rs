@@ -3,11 +3,20 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
 
-use super::{PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS};
+use super::{MovementMode, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS};
+use crate::physics::ground_detection::{OnGround, SteppingOn};
 
 /// Avian3d player physics bundle with dynamic rigid body.
+///
+/// This bundle contains all components needed for physics simulation:
+/// - Avian3d components (RigidBody, Collider, velocities, etc.)
+/// - Movement state tracking (MovementMode, OnGround, SteppingOn)
+///
+/// Both client and server use this bundle when spawning player entities,
+/// ensuring consistent physics behavior.
 #[derive(Bundle)]
 pub struct PlayerPhysicsBundle {
+    // Avian3d physics components
     pub rigid_body: RigidBody,
     pub collider: Collider,
     pub linear_velocity: LinearVelocity,
@@ -17,6 +26,10 @@ pub struct PlayerPhysicsBundle {
     pub friction: Friction,
     pub restitution: Restitution,
     pub ccd: SweptCcd,
+    // Movement state components (shared with ground detection systems)
+    pub movement_mode: MovementMode,
+    pub on_ground: OnGround,
+    pub stepping_on: SteppingOn,
 }
 
 impl PlayerPhysicsBundle {
@@ -37,6 +50,10 @@ impl PlayerPhysicsBundle {
             restitution: Restitution::new(0.0),
             // Enable continuous collision detection for fast movement
             ccd: SweptCcd::default(),
+            // Movement state defaults
+            movement_mode: MovementMode::default(),
+            on_ground: OnGround::default(),
+            stepping_on: SteppingOn::default(),
         }
     }
 }

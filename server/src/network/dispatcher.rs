@@ -16,8 +16,7 @@ use shared::messages::{
 };
 use shared::net::clock;
 use shared::physics::{
-    update_ground_state_system, update_stepped_block_system, MovementMode, OnGround,
-    PlayerPhysicsBundle, SteppingOn,
+    update_ground_state_system, update_stepped_block_system, MovementMode, PlayerPhysicsBundle,
 };
 use shared::world::realm::Realm;
 use shared::world::WorldSeed;
@@ -223,11 +222,8 @@ fn handle_auth_requests(
             Transform::from_translation(spawn_position),
             Realm::Overworld,
             NetworkPlayer { client_id },
-            MovementMode::default(),
             ClientReportedPredictedPosition(spawn_position),
             PlayerPhysicsBundle::new(),
-            OnGround::default(),
-            SteppingOn::default(),
         ));
         info!(
             "Spawned ECS entity for player {} at {:?}",

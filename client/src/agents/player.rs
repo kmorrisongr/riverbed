@@ -1,7 +1,7 @@
 use crate::sounds::{on_item_get, BlockSoundCD, FootstepCD};
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
-use shared::physics::{MovementMode, OnGround, PlayerPhysicsBundle};
+use shared::physics::PlayerPhysicsBundle;
 use shared::world::pos::pos2d::ColPos;
 use shared::world::pos::PlayerCol;
 use shared::{
@@ -11,7 +11,7 @@ use shared::{
     DEFAULT_SPAWN_POSITION,
 };
 
-use super::{block_action::BlockActionPlugin, key_binds::KeyBinds, Crouching, SteppingOn};
+use super::{block_action::BlockActionPlugin, key_binds::KeyBinds, Crouching};
 pub const HOTBAR_SLOTS: usize = 8;
 
 pub struct PlayerPlugin;
@@ -64,12 +64,7 @@ pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
             TargetBlock(None),
             ItemHolder::Inventory(inventory),
             PlayerControlled,
-        ))
-        .insert((
-            MovementMode::default(),
-            SteppingOn(Block::Air),
             Crouching(false),
-            OnGround::default(),
         ))
         .insert(SpatialListener::new(0.3))
         .insert((FootstepCD(0.), BlockSoundCD(0.)))
