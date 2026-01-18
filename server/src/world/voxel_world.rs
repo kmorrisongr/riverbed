@@ -276,7 +276,9 @@ impl BlockAccess for VoxelWorld {
 }
 
 impl shared::meshing::ChunkProvider for VoxelWorld {
-    fn get_chunk(&self, pos: ChunkPos) -> Option<shared::world::chunk::Chunk> {
-        self.chunks.get(&pos).map(|c| c.value().read().clone())
+    fn get_chunk(&self, pos: ChunkPos) -> Option<Arc<shared::world::chunk::Chunk>> {
+        self.chunks
+            .get(&pos)
+            .map(|c| Arc::new(c.value().read().clone()))
     }
 }

@@ -9,6 +9,7 @@ use bevy::prelude::*;
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender, TrySendError};
 use std::collections::{HashMap, HashSet};
 use std::thread::Builder;
+use std::sync::Arc;
 
 use crate::world::chunk::Chunk;
 use crate::world::pos::pos2d::chunks_in_col;
@@ -57,7 +58,7 @@ pub struct ChunkColliderResultReceiver(pub Receiver<ChunkColliderResult>);
 
 struct ChunkColliderJob {
     chunk_pos: ChunkPos,
-    chunk: Chunk,
+    chunk: Arc<Chunk>,
 }
 
 struct ChunkColliderResult {
@@ -68,7 +69,7 @@ struct ChunkColliderResult {
 /// Trait for accessing chunk data. Implemented by both ClientWorldMap and VoxelWorld.
 pub trait ChunkProvider: Send + Sync + 'static {
     /// Get a chunk if it exists, returning a clone for thread safety.
-    fn get_chunk(&self, pos: ChunkPos) -> Option<Chunk>;
+    fn get_chunk(&self, pos: ChunkPos) -> Option<Arc<Chunk>>;
 }
 
 /// Maximum number of new collider cook tasks to start per frame.

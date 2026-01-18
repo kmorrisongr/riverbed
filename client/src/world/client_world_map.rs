@@ -129,10 +129,10 @@ impl BlockAccess for ClientWorldMap {
 }
 
 impl shared::meshing::ChunkProvider for ClientWorldMap {
-    fn get_chunk(&self, pos: ChunkPos) -> Option<shared::world::chunk::Chunk> {
+    fn get_chunk(&self, pos: ChunkPos) -> Option<Arc<shared::world::chunk::Chunk>> {
         self.chunks
             .get(&pos)
-            .map(|c| c.value().read().inner().clone())
+            .map(|c| Arc::new(c.value().read().inner().clone()))
     }
 }
 
