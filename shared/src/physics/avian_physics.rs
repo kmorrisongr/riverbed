@@ -516,18 +516,61 @@ pub fn actions_to_movement_input(
 /// This plugin sets up avian3d with settings appropriate for voxel world physics.
 /// Note that actual collision detection is done via the custom BlockAccess system,
 /// not avian3d's built-in collision detection.
-pub struct SharedPhysicsPlugin;
+///
+/// Use `SharedPhysicsPlugin::client()` for client apps (with debug rendering support)
+/// or `SharedPhysicsPlugin::server()` for headless server apps.
+pub struct SharedPhysicsPlugin {
+    /// Whether this is running on a headless server (no rendering)
+    headless: bool,
+}
+
+impl SharedPhysicsPlugin {
+    /// Create a physics plugin configured for client use (with debug rendering support)
+    pub fn client() -> Self {
+        Self { headless: false }
+    }
+
+    /// Create a physics plugin configured for headless server use
+    pub fn server() -> Self {
+        Self { headless: true }
+    }
+}
+
+impl Default for SharedPhysicsPlugin {
+    fn default() -> Self {
+        Self::client()
+    }
+}
 
 impl Plugin for SharedPhysicsPlugin {
     fn build(&self, app: &mut App) {
-        // Add avian3d physics plugin with custom configuration
-        app.add_plugins(
-            PhysicsPlugins::default()
-                // We use a fixed timestep that matches our tick rate
-                .with_length_unit(1.0), // 1 unit = 1 meter (block size)
-        );
+        use avian3d::prelude::*;
+        use avian3d::schedule::PhysicsSchedulePlugin;
 
-        // Configure gravity (we handle it manually, but set default for reference)
+        if self.headless {
+            // For headless server: we only need the physics scheduling infrastructure,
+            // not the full collision system (which requires AssetPlugin for mesh colliders).
+            // Since we use custom voxel-based collision via BlockAccess, we set up
+            // a minimal configuration with just the scheduling.
+            //
+            // This avoids ColliderCachePlugin which requires AssetEvent<Mesh>.
+            app.add_plugins(PhysicsSchedulePlugin::new(FixedUpdate));
+
+            // Register the core physics types we use
+            app.register_type::<RigidBody>()
+                .register_type::<Position>()
+                .register_type::<Rotation>()
+                .register_type::<LinearVelocity>()
+                .register_type::<AngularVelocity>()
+                .register_type::<GravityScale>()
+                .register_type::<LockedAxes>();
+        } else {
+            // For client: use default physics plugins (includes debug rendering support)
+            // The client has AssetPlugin so full collision features work
+            app.add_plugins(PhysicsPlugins::default().with_length_unit(1.0));
+        }
+
+        // Configure gravity (we handle it manually for voxel collision, but set default for reference)
         app.insert_resource(Gravity(Vec3::new(0.0, -PLAYER_GRAVITY, 0.0).into()));
     }
 }

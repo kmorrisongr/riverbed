@@ -15,6 +15,7 @@ use crossbeam::channel;
 use shared::world::pos::pos3d::ChunkPos;
 use shared::world::world_rng::WorldRng;
 use shared::world::WorldSeed;
+use shared::physics::SharedPhysicsPlugin;
 use shared::{get_shared_renet_config, GameServerConfig, PROTOCOL_ID, TICKS_PER_SECOND};
 
 use crate::logging::{LogBroadcastPlugin, LogEventSender};
@@ -121,6 +122,9 @@ pub fn configure_server_app(
     // Networking plugins
     app.add_plugins(RenetServerPlugin);
     app.add_plugins(NetcodeServerPlugin);
+
+    // Physics plugin (headless mode for server)
+    app.add_plugins(SharedPhysicsPlugin::server());
 
     // Always insert LogEventSender (needed by terrain thread), but only broadcast when configured
     if config.add_log_broadcast {

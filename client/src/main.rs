@@ -28,6 +28,7 @@ use network::NetworkPlugin;
 use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use render::{Render, TextureLoadPlugin};
 use shared::logging::logging::RiverbedLogPlugin;
+use shared::physics::SharedPhysicsPlugin;
 use shared::world::block_entities::BlockEntities;
 use shared::world::world_rng::WorldRng;
 use sounds::SoundPlugin;
@@ -96,6 +97,7 @@ fn client(args: Args) {
                 .disable::<LogPlugin>(),
         )
         .add_plugins(RiverbedLogPlugin)
+        .add_plugins(SharedPhysicsPlugin::client())
         .insert_resource(network::TargetServer {
             address: args.server,
             ..default()
