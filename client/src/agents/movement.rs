@@ -10,7 +10,6 @@ use shared::physics::{
     apply_player_input_to_components, update_ground_state_system,
     update_stepped_block_system, LinearVelocity, MovementMode, OnGround,
 };
-use shared::world::realm::Realm;
 
 use crate::network::buffered_client::CurrentFrameInputs;
 use crate::render::FpsCam;
@@ -55,16 +54,14 @@ fn apply_movement_input(
     camera_query: Query<&Transform, With<FpsCam>>,
     mut player_query: Query<
         (
-            &Transform,
             &mut LinearVelocity,
-            &Realm,
             &mut MovementMode,
             &OnGround,
         ),
         (With<PlayerControlled>, Without<FpsCam>),
     >,
 ) {
-    let Ok((transform, mut linear_velocity, realm, mut movement_mode, on_ground)) =
+    let Ok((mut linear_velocity, mut movement_mode, on_ground)) =
         player_query.single_mut()
     else {
         return;
@@ -80,10 +77,8 @@ fn apply_movement_input(
 
     let delta_seconds = time.delta_secs();
     apply_player_input_to_components(
-        transform,
         &mut linear_velocity,
         &mut movement_mode,
-        *realm,
         on_ground.0,
         &frame_inputs.0.inputs,
         &camera_transform,

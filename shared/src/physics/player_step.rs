@@ -36,13 +36,14 @@ pub struct PlayerStepOutput {
 /// the player's `LinearVelocity` component; avian3d will then handle
 /// collision resolution against chunk colliders.
 pub fn apply_player_input_step(
-    state: &PhysicsState,
+    velocity: Vec3,
+    mut movement_mode: MovementMode,
+    on_ground: bool,
     actions: &HashSet<TransmittableAction>,
     camera: &Transform,
     delta_seconds: f32,
 ) -> PlayerStepOutput {
-    let mut movement_mode = state.movement_mode;
-    let mut velocity = state.velocity;
+    let mut velocity = velocity;
 
     // Handle fly-mode toggle
     if actions.contains(&TransmittableAction::ToggleFlyMode) {
@@ -59,19 +60,17 @@ pub fn apply_player_input_step(
 
     let movement_input = actions_to_movement_input(actions, camera);
 
-    let sim_state = PhysicsState::from_components(
-        state.position,
+    let new_velocity = compute_desired_velocity(
         velocity,
         movement_mode,
-        state.realm,
-        state.on_ground,
+        on_ground,
+        &movement_input,
+        delta_seconds,
     );
 
-    let result = compute_desired_velocity(&sim_state, &movement_input, delta_seconds);
-
     PlayerStepOutput {
-        velocity: result.new_velocity,
-        on_ground: state.on_ground,
+        velocity: new_velocity,
+        on_ground,
         movement_mode,
     }
 }
@@ -79,26 +78,25 @@ pub fn apply_player_input_step(
 /// Shared helper that applies a single input frame directly to ECS components.
 ///
 /// This is used by both client prediction and the authoritative server to avoid
-/// duplicating the "build PhysicsState -> step -> write components" boilerplate.
+/// duplicating the "build inputs -> step -> write components" boilerplate.
 pub fn apply_player_input_to_components(
-    transform: &Transform,
+    _transform: &Transform, // Keep for API compatibility if needed, though unused now
     linear_velocity: &mut LinearVelocity,
     movement_mode: &mut MovementMode,
-    realm: Realm,
+    _realm: Realm, // Unused in velocity computation
     on_ground: bool,
     actions: &HashSet<TransmittableAction>,
     camera: &Transform,
     delta_seconds: f32,
 ) -> PlayerStepOutput {
-    let state = PhysicsState::from_components(
-        transform.translation,
+    let step = apply_player_input_step(
         Vec3::from(linear_velocity.0),
         *movement_mode,
-        realm,
         on_ground,
+        actions,
+        camera,
+        delta_seconds,
     );
-
-    let step = apply_player_input_step(&state, actions, camera, delta_seconds);
 
     // Write outputs back to components for simulation
     linear_velocity.0 = step.velocity.into();

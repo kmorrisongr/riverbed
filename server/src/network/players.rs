@@ -6,7 +6,6 @@ use shared::messages::{
 use shared::physics::{
     apply_player_input_to_components, LinearVelocity, MovementMode, OnGround,
 };
-use shared::world::realm::Realm;
 use std::collections::HashMap;
 
 use super::dispatcher::NetworkPlayer;
@@ -101,11 +100,9 @@ pub fn handle_player_inputs_system(
     mut registry: ResMut<PlayerRegistry>,
     mut player_query: Query<(
         &NetworkPlayer,
-        &Transform,
         &mut LinearVelocity,
         &mut MovementMode,
         &mut ClientReportedPredictedPosition,
-        &Realm,
         &OnGround,
     )>,
 ) {
@@ -123,9 +120,9 @@ pub fn handle_player_inputs_system(
             continue;
         }
 
-        let Some((_, transform, mut linear_velocity, mut movement_mode, mut predicted_pos, realm, on_ground)) = player_query
+        let Some((_, mut linear_velocity, mut movement_mode, mut predicted_pos, on_ground)) = player_query
             .iter_mut()
-            .find(|(np, _, _, _, _, _, _)| np.client_id == ev.client_id)
+            .find(|(np, _, _, _, _)| np.client_id == ev.client_id)
         else {
             warn!(
                 "No ECS entity found for authenticated player {}",
@@ -143,10 +140,8 @@ pub fn handle_player_inputs_system(
 
         let delta_seconds = ev.input.delta_ms as f32 / 1000.0;
         apply_player_input_to_components(
-            transform,
             &mut linear_velocity,
             &mut movement_mode,
-            *realm,
             on_ground.0,
             &ev.input.inputs,
             &ev.input.camera,

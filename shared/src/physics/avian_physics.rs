@@ -14,10 +14,6 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
 
-use crate::block::Block;
-use crate::world::block_access::BlockAccess;
-use crate::world::pos::pos3d::BlockPos;
-use crate::world::realm::Realm;
 use crate::{FLY_SPEED, FLY_VERTICAL_SPEED, WALK_SPEED};
 
 /// Player physics constants
@@ -72,74 +68,6 @@ pub struct MovementInput {
     pub camera_right: Vec3,
 }
 
-/// Physics state for an entity using avian3d types.
-///
-/// This is the canonical physics state used for simulation. It's compatible
-/// with avian3d's Position and LinearVelocity components.
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
-pub struct PhysicsState {
-    /// Entity position (compatible with avian3d Position)
-    pub position: Vec3,
-    /// Entity velocity (compatible with avian3d LinearVelocity)
-    pub velocity: Vec3,
-    /// Current movement mode (walking or flying)
-    pub movement_mode: MovementMode,
-    /// The realm the entity is in
-    pub realm: Realm,
-    /// Whether the entity is on the ground (for jumping)
-    pub on_ground: bool,
-}
-
-impl PhysicsState {
-    /// Create a new physics state at the given position
-    pub fn new(position: Vec3, realm: Realm) -> Self {
-        Self {
-            position,
-            velocity: Vec3::ZERO,
-            movement_mode: MovementMode::Walking,
-            realm,
-            on_ground: false,
-        }
-    }
-
-    /// Build a physics state from components (common pattern in systems)
-    pub fn from_components(
-        position: Vec3,
-        velocity: Vec3,
-        movement_mode: MovementMode,
-        realm: Realm,
-        on_ground: bool,
-    ) -> Self {
-        Self {
-            position,
-            velocity,
-            movement_mode,
-            realm,
-            on_ground,
-        }
-    }
-
-    /// Convert to avian3d Position component
-    pub fn to_position(&self) -> Position {
-        Position(self.position.into())
-    }
-
-    /// Convert to avian3d LinearVelocity component
-    pub fn to_linear_velocity(&self) -> LinearVelocity {
-        LinearVelocity(self.velocity.into())
-    }
-}
-
-/// Result of computing desired velocity for a single physics tick.
-/// 
-/// This is the low-level output from `compute_desired_velocity`. For the
-/// higher-level player input result (including movement mode changes),
-/// see `PlayerStepOutput` in the `player_step` module.
-#[derive(Debug, Clone)]
-pub struct PhysicsStepResult {
-    pub new_velocity: Vec3,
-}
-
 /// Avian3d player physics bundle with dynamic rigid body.
 ///
 /// Uses a capsule collider for smooth movement over terrain.
@@ -190,50 +118,6 @@ impl Default for PlayerPhysicsBundle {
 }
 
 // =============================================================================
-// Block Query Functions (gameplay-only, not physics collision)
-// =============================================================================
-// These functions query the voxel world directly for gameplay purposes like
-// footstep sounds and surface friction. For physics collision/ground detection,
-// rely on `OnGround` which is populated from avian3d collision contacts.
-// =============================================================================
-
-/// Get block positions below the player for surface queries (e.g., footsteps).
-fn blocks_below(pos: Vec3, realm: Realm, aabb: Vec3) -> impl Iterator<Item = BlockPos> {
-    let y = (pos.y - 0.01).floor() as i32;
-    let x_start = pos.x.floor() as i32;
-    let x_end = (pos.x + aabb.x).floor() as i32;
-    let z_start = pos.z.floor() as i32;
-    let z_end = (pos.z + aabb.z).floor() as i32;
-
-    (x_start..=x_end)
-        .flat_map(move |x| (z_start..=z_end).map(move |z| (x, z)))
-        .map(move |(x, z)| BlockPos { x, y, z, realm })
-}
-
-/// Get the block the entity is standing on (for friction/slowing calculations)
-pub fn get_stepped_block<W: BlockAccess>(
-    world: &W,
-    position: Vec3,
-    realm: Realm,
-    aabb: Vec3,
-) -> Block {
-    let mut closest_block = Block::Air;
-    let mut min_dist = f32::INFINITY;
-    for block_pos in blocks_below(position, realm, aabb) {
-        let block = world.get_block_safe(block_pos);
-        if block.is_traversable() {
-            continue;
-        }
-        let dist = (position.x - block_pos.x as f32).abs() + (position.z - block_pos.z as f32).abs();
-        if dist < min_dist {
-            min_dist = dist;
-            closest_block = block;
-        }
-    }
-    closest_block
-}
-
-// =============================================================================
 // Velocity Computation (Custom Kinematics)
 // =============================================================================
 
@@ -250,11 +134,13 @@ pub fn get_stepped_block<W: BlockAccess>(
 /// For flying mode:
 /// - Direct velocity control, no gravity
 pub fn compute_desired_velocity(
-    state: &PhysicsState,
+    velocity: Vec3,
+    movement_mode: MovementMode,
+    on_ground: bool,
     input: &MovementInput,
     delta_seconds: f32,
-) -> PhysicsStepResult {
-    let mut velocity = state.velocity;
+) -> Vec3 {
+    let mut velocity = velocity;
 
     // Calculate world-space movement direction from input
     let forward_horizontal =
@@ -271,29 +157,26 @@ pub fn compute_desired_velocity(
     };
 
     // Calculate target horizontal velocity from input direction and mode speed
-    let speed = state.movement_mode.speed();
+    let speed = movement_mode.speed();
     let target_velocity_xz = world_move_dir * speed;
 
-    match state.movement_mode {
+    match movement_mode {
         MovementMode::Flying => {
             // Flying mode: direct velocity control
             velocity.x = target_velocity_xz.x;
             velocity.z = target_velocity_xz.z;
             velocity.y = (input.jump as i32 - input.crouch as i32) as f32 * FLY_VERTICAL_SPEED;
 
-            PhysicsStepResult {
-                new_velocity: velocity,
-            }
+            velocity
         }
         MovementMode::Walking => {
             // Handle jumping (apply impulse if grounded)
-            if input.jump && state.on_ground {
+            if input.jump && on_ground {
                 velocity.y = PLAYER_JUMP_FORCE;
             }
 
             // Use ground or air friction based on contact state
-            // (Future: could query stepped block for surface-specific friction)
-            let friction = if state.on_ground {
+            let friction = if on_ground {
                 GROUND_FRICTION
             } else {
                 AIR_FRICTION
@@ -313,9 +196,7 @@ pub fn compute_desired_velocity(
                 velocity.z += velocity_diff.z * accel_factor;
             }
 
-            PhysicsStepResult {
-                new_velocity: velocity,
-            }
+            velocity
         }
     }
 }
@@ -356,6 +237,96 @@ pub fn actions_to_movement_input(
 }
 
 // =============================================================================
+// Player Input & Movement Logic
+// =============================================================================
+
+/// Result of applying a single input frame to a player's physics state.
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct PlayerStepOutput {
+    /// The desired velocity (avian3d will apply this and resolve collisions)
+    pub velocity: Vec3,
+    /// Whether the player was on ground this frame (passed through from input state,
+    /// used by callers for sound/visual effects - not modified by velocity computation)
+    pub on_ground: bool,
+    /// The current movement mode (may change if fly toggle was pressed)
+    pub movement_mode: MovementMode,
+}
+
+/// Apply movement actions (including fly toggle) and compute desired velocity.
+///
+/// This is shared between client prediction and server authority to keep
+/// movement behavior identical.
+pub fn apply_player_input_step(
+    velocity: Vec3,
+    mut movement_mode: MovementMode,
+    on_ground: bool,
+    actions: &bevy::platform::collections::HashSet<crate::messages::TransmittableAction>,
+    camera: &Transform,
+    delta_seconds: f32,
+) -> PlayerStepOutput {
+    let mut current_velocity = velocity;
+
+    // Handle fly-mode toggle
+    if actions.contains(&crate::messages::TransmittableAction::ToggleFlyMode) {
+        movement_mode = match movement_mode {
+            MovementMode::Walking => MovementMode::Flying,
+            MovementMode::Flying => MovementMode::Walking,
+        };
+
+        // Reset vertical velocity when returning to walking to avoid ghost motion
+        if movement_mode == MovementMode::Walking {
+            current_velocity = Vec3::ZERO;
+        }
+    }
+
+    let movement_input = actions_to_movement_input(actions, camera);
+
+    let new_velocity = compute_desired_velocity(
+        current_velocity,
+        movement_mode,
+        on_ground,
+        &movement_input,
+        delta_seconds,
+    );
+
+    PlayerStepOutput {
+        velocity: new_velocity,
+        on_ground,
+        movement_mode,
+    }
+}
+
+/// Shared helper that applies a single input frame directly to ECS components.
+///
+/// This is used by both client prediction and the authoritative server to avoid
+/// duplicating the boilerplate.
+pub fn apply_player_input_to_components(
+    linear_velocity: &mut LinearVelocity,
+    movement_mode: &mut MovementMode,
+    on_ground: bool,
+    actions: &bevy::platform::collections::HashSet<crate::messages::TransmittableAction>,
+    camera: &Transform,
+    delta_seconds: f32,
+) -> PlayerStepOutput {
+    let step = apply_player_input_step(
+        Vec3::from(linear_velocity.0),
+        *movement_mode,
+        on_ground,
+        actions,
+        camera,
+        delta_seconds,
+    );
+
+    // Write outputs back to components for simulation
+    linear_velocity.0 = step.velocity.into();
+    if step.movement_mode != *movement_mode {
+        *movement_mode = step.movement_mode;
+    }
+
+    step
+}
+
+// =============================================================================
 // Avian3d Plugin Integration
 // =============================================================================
 
@@ -385,63 +356,10 @@ impl Plugin for SharedPhysicsPlugin {
 mod tests {
     use super::*;
 
-    /// Mock world for testing
-    struct TestWorld;
-
-    impl BlockAccess for TestWorld {
-        fn get_block_safe(&self, pos: BlockPos) -> Block {
-            // Floor at y=0
-            if pos.y < 0 {
-                Block::Granite
-            } else {
-                Block::Air
-            }
-        }
-
-        fn is_chunk_loaded(&self, _chunk_pos: crate::world::pos::pos3d::ChunkPos) -> bool {
-            true
-        }
-    }
-
-    #[test]
-    fn test_physics_state_avian_conversion() {
-        let state = PhysicsState {
-            position: Vec3::new(1.0, 2.0, 3.0),
-            velocity: Vec3::new(0.5, 1.0, -0.5),
-            movement_mode: MovementMode::Walking,
-            realm: Realm::Overworld,
-            on_ground: true,
-        };
-
-        let pos = state.to_position();
-        let vel = state.to_linear_velocity();
-
-        assert_eq!(Vec3::from(pos.0), state.position);
-        assert_eq!(Vec3::from(vel.0), state.velocity);
-    }
-
-    #[test]
-    fn test_stepped_block_query() {
-        let world = TestWorld;
-
-        // At y=0 we should see the granite floor below
-        let block = get_stepped_block(&world, Vec3::new(0.0, 0.0, 0.0), Realm::Overworld, PLAYER_QUERY_BOUNDS);
-        assert_eq!(block, Block::Granite);
-
-        // Far above the floor should return air
-        let block = get_stepped_block(&world, Vec3::new(0.0, 5.0, 0.0), Realm::Overworld, PLAYER_QUERY_BOUNDS);
-        assert_eq!(block, Block::Air);
-    }
-
     #[test]
     fn test_velocity_computation_walking() {
-        let state = PhysicsState {
-            position: Vec3::new(0.0, 10.0, 0.0),
-            velocity: Vec3::ZERO,
-            movement_mode: MovementMode::Walking,
-            realm: Realm::Overworld,
-            on_ground: true,
-        };
+        let velocity = Vec3::ZERO;
+        let mode = MovementMode::Walking;
         let input = MovementInput {
             move_direction: Vec3::new(0.0, 0.0, 1.0), // Forward
             jump: false,
@@ -450,21 +368,16 @@ mod tests {
             camera_right: Vec3::X,
         };
 
-        let result = compute_desired_velocity(&state, &input, 0.1);
+        let new_velocity = compute_desired_velocity(velocity, mode, true, &input, 0.1);
 
         // Should have positive Z velocity (forward movement)
-        assert!(result.new_velocity.z > 0.0);
+        assert!(new_velocity.z > 0.0);
     }
 
     #[test]
     fn test_velocity_computation_jump() {
-        let state = PhysicsState {
-            position: Vec3::new(0.0, 0.0, 0.0),
-            velocity: Vec3::ZERO,
-            movement_mode: MovementMode::Walking,
-            realm: Realm::Overworld,
-            on_ground: true,
-        };
+        let velocity = Vec3::ZERO;
+        let mode = MovementMode::Walking;
         let input = MovementInput {
             move_direction: Vec3::ZERO,
             jump: true,
@@ -473,21 +386,16 @@ mod tests {
             camera_right: Vec3::X,
         };
 
-        let result = compute_desired_velocity(&state, &input, 0.1);
+        let new_velocity = compute_desired_velocity(velocity, mode, true, &input, 0.1);
 
         // Should have upward velocity from jump
-        assert_eq!(result.new_velocity.y, PLAYER_JUMP_FORCE);
+        assert_eq!(new_velocity.y, PLAYER_JUMP_FORCE);
     }
 
     #[test]
     fn test_flying_mode_direct_control() {
-        let state = PhysicsState {
-            position: Vec3::new(0.0, 10.0, 0.0),
-            velocity: Vec3::ZERO,
-            movement_mode: MovementMode::Flying,
-            realm: Realm::Overworld,
-            on_ground: false,
-        };
+        let velocity = Vec3::ZERO;
+        let mode = MovementMode::Flying;
         let input = MovementInput {
             move_direction: Vec3::ZERO,
             jump: true, // Fly up
@@ -496,9 +404,9 @@ mod tests {
             camera_right: Vec3::X,
         };
 
-        let result = compute_desired_velocity(&state, &input, 0.1);
+        let new_velocity = compute_desired_velocity(velocity, mode, false, &input, 0.1);
 
         // Should have upward velocity
-        assert_eq!(result.new_velocity.y, FLY_VERTICAL_SPEED);
+        assert_eq!(new_velocity.y, FLY_VERTICAL_SPEED);
     }
 }

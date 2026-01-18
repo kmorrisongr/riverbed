@@ -11,8 +11,9 @@ use avian3d::prelude::Collisions;
 use bevy::prelude::*;
 
 use crate::block::Block;
-use crate::physics::{get_stepped_block, PLAYER_QUERY_BOUNDS};
+use crate::physics::{PLAYER_QUERY_BOUNDS, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS};
 use crate::world::block_access::BlockAccess;
+use crate::world::pos::pos3d::BlockPos;
 use crate::world::realm::Realm;
 
 /// Minimum Y component of contact normal to count as "ground".
@@ -40,6 +41,53 @@ impl Default for SteppingOn {
     fn default() -> Self {
         Self(Block::Air)
     }
+}
+
+/// Get block positions below the player for orientation-agnostic surface queries.
+fn blocks_below(pos: Vec3, realm: Realm, aabb: Vec3) -> impl Iterator<Item = BlockPos> {
+    // Determine Y level just below feet (assuming pos is capsule center)
+    let feet_y = pos.y - (PLAYER_CAPSULE_HEIGHT / 2.0 + PLAYER_CAPSULE_RADIUS);
+    let y = (feet_y - 0.01).floor() as i32;
+
+    // Center the query area on the position
+    let x_start = (pos.x - aabb.x / 2.0).floor() as i32;
+    let x_end = (pos.x + aabb.x / 2.0).floor() as i32;
+    let z_start = (pos.z - aabb.z / 2.0).floor() as i32;
+    let z_end = (pos.z + aabb.z / 2.0).floor() as i32;
+
+    (x_start..=x_end)
+        .flat_map(move |x| (z_start..=z_end).map(move |z| (x, z)))
+        .map(move |(x, z)| BlockPos { x, y, z, realm })
+}
+
+/// Get the block the entity is standing on (for friction/slowing calculations).
+///
+/// This version is fixed to work with player positions (centered capsule).
+pub fn get_stepped_block<W: BlockAccess>(
+    world: &W,
+    position: Vec3,
+    realm: Realm,
+    aabb: Vec3,
+) -> Block {
+    let mut closest_block = Block::Air;
+    let mut min_dist = f32::INFINITY;
+
+    for block_pos in blocks_below(position, realm, aabb) {
+        let block = world.get_block_safe(block_pos);
+        if block.is_traversable() {
+            continue;
+        }
+
+        // Horizontal distance from center
+        let dist = (position.x - (block_pos.x as f32 + 0.5)).powi(2)
+            + (position.z - (block_pos.z as f32 + 0.5)).powi(2);
+
+        if dist < min_dist {
+            min_dist = dist;
+            closest_block = block;
+        }
+    }
+    closest_block
 }
 
 /// Check if any contact normal indicates standing on ground.
@@ -132,5 +180,46 @@ mod tests {
         // 0.7 should be approximately 45 degrees
         let angle = GROUND_NORMAL_THRESHOLD.acos().to_degrees();
         assert!(angle > 40.0 && angle < 50.0, "Threshold angle: {}", angle);
+    }
+
+    /// Mock world for testing
+    struct TestWorld;
+
+    impl BlockAccess for TestWorld {
+        fn get_block_safe(&self, pos: BlockPos) -> Block {
+            // Floor starts below y=0
+            if pos.y < 0 {
+                Block::Granite
+            } else {
+                Block::Air
+            }
+        }
+
+        fn is_chunk_loaded(&self, _chunk_pos: crate::world::pos::pos3d::ChunkPos) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn test_stepped_block_query() {
+        let world = TestWorld;
+
+        // At y=0.5 we should see the granite floor below (feet at ~-0.35)
+        let block = get_stepped_block(
+            &world,
+            Vec3::new(0.0, 0.5, 0.0),
+            Realm::Overworld,
+            PLAYER_QUERY_BOUNDS,
+        );
+        assert_eq!(block, Block::Granite);
+
+        // Far above the floor should return air
+        let block = get_stepped_block(
+            &world,
+            Vec3::new(0.0, 5.0, 0.0),
+            Realm::Overworld,
+            PLAYER_QUERY_BOUNDS,
+        );
+        assert_eq!(block, Block::Air);
     }
 }
