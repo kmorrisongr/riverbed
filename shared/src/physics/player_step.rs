@@ -1,35 +1,39 @@
-//! Player input step for shared physics simulation.
+//! Player input step for physics simulation.
 //!
 //! This module provides the `apply_player_input_step` function which processes
-//! player input and runs a physics simulation step. This function is used by
+//! player input and computes the desired velocity. This function is used by
 //! both client (for prediction) and server (for authority) to ensure identical
 //! movement behavior.
+//!
+//! Note: This computes velocity only. Avian3d applies the velocity and handles
+//! collision resolution against chunk colliders.
 
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::messages::TransmittableAction;
 use crate::physics::{
-    actions_to_movement_input, simulate_physics_step, MovementMode, PhysicsState, PhysicsStepResult,
+    actions_to_movement_input, compute_desired_velocity, MovementMode, PhysicsState,
 };
-use crate::world::block_access::BlockAccess;
-
 
 /// Result of applying a single input frame to a player's physics state.
 #[derive(Debug, Clone, Copy)]
 pub struct PlayerStepOutput {
-    pub position: Vec3,
+    /// The desired velocity (avian3d will apply this and resolve collisions)
     pub velocity: Vec3,
+    /// Whether the player was on ground (used for jump logic)
     pub on_ground: bool,
+    /// The current movement mode
     pub movement_mode: MovementMode,
 }
 
-/// Apply movement actions (including fly toggle) and simulate a physics step.
+/// Apply movement actions (including fly toggle) and compute desired velocity.
 ///
-/// This is shared between client prediction/reconciliation and server authority
-/// to keep movement behavior identical.
-pub fn apply_player_input_step<W: BlockAccess>(
-    world: &W,
+/// This is shared between client prediction and server authority to keep
+/// movement behavior identical. The returned velocity should be applied to
+/// the player's `LinearVelocity` component; avian3d will then handle
+/// collision resolution against chunk colliders.
+pub fn apply_player_input_step(
     state: &PhysicsState,
     actions: &HashSet<TransmittableAction>,
     camera: &Transform,
@@ -61,11 +65,9 @@ pub fn apply_player_input_step<W: BlockAccess>(
         on_ground: state.on_ground,
     };
 
-    let result: PhysicsStepResult =
-        simulate_physics_step(world, &sim_state, &movement_input, delta_seconds);
+    let result = compute_desired_velocity(&sim_state, &movement_input, delta_seconds);
 
     PlayerStepOutput {
-        position: result.new_position,
         velocity: result.new_velocity,
         on_ground: result.on_ground,
         movement_mode,

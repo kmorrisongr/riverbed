@@ -3,11 +3,9 @@ use bevy_renet::renet::{ClientId, RenetServer};
 use shared::messages::{
     ClientToServerPlayerInput, PlayerId, ServerToClientMessage, ServerToClientPlayerUpdate,
 };
-use shared::physics::{player_step::apply_player_input_step, MovementMode, PhysicsState};
+use shared::physics::{player_step::apply_player_input_step, LinearVelocity, MovementMode, PhysicsState};
 use shared::world::realm::Realm;
 use std::collections::HashMap;
-
-use crate::world::voxel_world::VoxelWorld;
 
 use super::dispatcher::NetworkPlayer;
 use super::extensions::SendGameMessageExtension;
@@ -100,20 +98,20 @@ pub struct PlayerInputsEvent {
 
 /// Server-authoritative player input handling system.
 ///
-/// This system receives player inputs from clients and simulates physics
-/// authoritatively on the server. The server is the single source of truth
-/// for player positions.
+/// This system receives player inputs from clients, computes desired velocity,
+/// and sets it on the player's LinearVelocity component. Avian3d will then
+/// integrate the velocity and resolve collisions against chunk colliders.
 pub fn handle_player_inputs_system(
     mut events: MessageReader<PlayerInputsEvent>,
     mut registry: ResMut<PlayerRegistry>,
     mut player_query: Query<(
         &NetworkPlayer,
-        &mut Transform,
+        &Transform,
+        &mut LinearVelocity,
         &mut ServerPhysicsState,
         &mut ClientReportedPredictedPosition,
         &Realm,
     )>,
-    world: Res<VoxelWorld>,
 ) {
     for ev in events.read() {
         let Some(player) = registry.get_player_mut(ev.client_id) else {
@@ -129,9 +127,9 @@ pub fn handle_player_inputs_system(
             continue;
         }
 
-        let Some((_, mut transform, mut physics_state, mut predicted_pos, realm)) = player_query
+        let Some((_, transform, mut linear_velocity, mut physics_state, mut predicted_pos, realm)) = player_query
             .iter_mut()
-            .find(|(np, _, _, _, _)| np.client_id == ev.client_id)
+            .find(|(np, _, _, _, _, _)| np.client_id == ev.client_id)
         else {
             warn!(
                 "No ECS entity found for authenticated player {}",
@@ -150,22 +148,21 @@ pub fn handle_player_inputs_system(
         let delta_seconds = ev.input.delta_ms as f32 / 1000.0;
         let state = PhysicsState {
             position: transform.translation,
-            velocity: physics_state.velocity,
+            velocity: Vec3::from(linear_velocity.0),
             movement_mode: physics_state.movement_mode,
             realm: *realm,
             on_ground: physics_state.on_ground,
         };
 
         let step = apply_player_input_step(
-            &*world,
             &state,
             &ev.input.inputs,
             &ev.input.camera,
             delta_seconds,
         );
 
-        transform.translation = step.position;
-        transform.rotation = ev.input.camera.rotation;
+        // Set velocity - avian3d will integrate and resolve collisions
+        linear_velocity.0 = step.velocity.into();
         physics_state.velocity = step.velocity;
         physics_state.on_ground = step.on_ground;
         physics_state.movement_mode = step.movement_mode;

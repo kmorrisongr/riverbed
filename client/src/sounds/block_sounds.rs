@@ -1,5 +1,5 @@
 use super::block_sound_load::{BlockSound, BlockSoundLoadPlugin, BlockSounds};
-use crate::agents::{BlockActionType, BlockLootAction, SteppingOn, Velocity};
+use crate::agents::{BlockActionType, BlockLootAction, SteppingOn};
 use crate::world::BlockChanged;
 use crate::Block;
 use bevy::{
@@ -7,6 +7,8 @@ use bevy::{
     prelude::*,
 };
 use rand::Rng;
+use shared::physics::LinearVelocity;
+
 const RAND_AMPLITUDE: f32 = 0.3;
 // distance between steps (in blocks)
 const STEP_DIST: f32 = 2.5;
@@ -29,10 +31,10 @@ fn footsteps(
     mut commands: Commands,
     block_sounds: Res<BlockSounds>,
     time: Res<Time>,
-    mut steppers_query: Query<(&Transform, &Velocity, &SteppingOn, &mut FootstepCD)>,
+    mut steppers_query: Query<(&Transform, &LinearVelocity, &SteppingOn, &mut FootstepCD)>,
 ) {
-    for (transform, velocity, stepping_on, mut footstep_cd) in steppers_query.iter_mut() {
-        let speed = velocity.0.length();
+    for (transform, linear_velocity, stepping_on, mut footstep_cd) in steppers_query.iter_mut() {
+        let speed = Vec3::from(linear_velocity.0).length();
         if speed == 0. {
             continue;
         }

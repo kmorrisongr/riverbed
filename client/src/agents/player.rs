@@ -1,17 +1,15 @@
-use crate::{
-    agents::{Velocity, AABB},
-    sounds::{on_item_get, BlockSoundCD, FootstepCD},
-};
-use bevy::{math::Vec3, prelude::*};
+use crate::sounds::{on_item_get, BlockSoundCD, FootstepCD};
+use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
+use shared::physics::PlayerPhysicsBundle;
 use shared::world::pos::pos2d::ColPos;
 use shared::world::pos::PlayerCol;
 use shared::{
     block::Block,
     items::{item_slots::ItemHolder, new_inventory, InventoryTrait, Item, Stack},
     world::{realm::Realm, BlockRayCastHit},
+    DEFAULT_SPAWN_POSITION,
 };
-use shared::{DEFAULT_SPAWN_POSITION, PLAYER_AABB};
 
 use super::{block_action::BlockActionPlugin, key_binds::KeyBinds, Crouching, SteppingOn, Walking};
 pub const HOTBAR_SLOTS: usize = 8;
@@ -62,8 +60,7 @@ pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
             },
             Visibility::default(),
             realm,
-            AABB(PLAYER_AABB),
-            Velocity(Vec3::default()),
+            PlayerPhysicsBundle::new(),
             TargetBlock(None),
             ItemHolder::Inventory(inventory),
             PlayerControlled,

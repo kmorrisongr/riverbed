@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn test_extract_quads_single_block() {
         let mut chunk = Chunk::new();
-        chunk.set((1, 1, 1), Block::Stone);
+        chunk.set((1, 1, 1), Block::Granite);
         let quads = extract_quads(&chunk, 1);
         // A single block should produce 6 quads (one per face)
         assert_eq!(quads.total_quads(), 6);

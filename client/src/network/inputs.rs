@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 use bevy_renet::renet::RenetClient;
 use shared::messages::ClientToServerMessage;
+use shared::physics::LinearVelocity;
 
 use crate::agents::key_binds::KeyBinds;
 use crate::agents::PlayerControlled;
-use crate::agents::Velocity;
 use crate::network::TargetServerState;
 use crate::render::FpsCam;
 use crate::ui::SelectedHotbarSlot;
@@ -61,7 +61,7 @@ pub fn capture_player_inputs_system(
 
 pub fn update_frame_inputs_system(
     camera: Query<&Transform, With<FpsCam>>,
-    player: Query<(&Transform, &Velocity), (With<PlayerControlled>, Without<FpsCam>)>,
+    player: Query<(&Transform, &LinearVelocity), (With<PlayerControlled>, Without<FpsCam>)>,
     selected_slot: Res<SelectedHotbarSlot>,
     mut frame_inputs: ResMut<CurrentFrameInputs>,
 ) {
@@ -73,9 +73,9 @@ pub fn update_frame_inputs_system(
         frame_inputs.0.camera = *camera_transform;
     }
 
-    if let Ok((player_transform, velocity)) = player.single() {
+    if let Ok((player_transform, linear_velocity)) = player.single() {
         frame_inputs.0.predicted_position = player_transform.translation;
-        frame_inputs.0.predicted_velocity = velocity.0;
+        frame_inputs.0.predicted_velocity = Vec3::from(linear_velocity.0);
     }
 
     frame_inputs.0.hotbar_slot = selected_slot.0 as u32;

@@ -97,7 +97,7 @@ fn client(args: Args) {
                 .disable::<LogPlugin>(),
         )
         .add_plugins(RiverbedLogPlugin)
-        .add_plugins(SharedPhysicsPlugin::client())
+        .add_plugins(SharedPhysicsPlugin)
         .insert_resource(network::TargetServer {
             address: args.server,
             ..default()

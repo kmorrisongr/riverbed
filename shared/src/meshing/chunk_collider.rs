@@ -198,7 +198,7 @@ mod tests {
         use crate::block::Block;
 
         let mut chunk = Chunk::new();
-        chunk.set((1, 1, 1), Block::Stone);
+        chunk.set((1, 1, 1), Block::Granite);
 
         let collider = generate_chunk_collider(&chunk);
         assert!(collider.is_some());
@@ -209,7 +209,7 @@ mod tests {
         use crate::block::Block;
 
         let mut chunk = Chunk::new();
-        chunk.set((1, 1, 1), Block::Stone);
+        chunk.set((1, 1, 1), Block::Granite);
 
         let chunk_pos = ChunkPos {
             x: 0,

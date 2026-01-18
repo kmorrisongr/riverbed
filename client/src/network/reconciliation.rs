@@ -4,28 +4,23 @@
 //! for a server-authoritative networking model. The server is the single source
 //! of truth (SSOT) for player positions.
 //!
-//! ## How it works:
-//! 1. Client predicts movement locally for responsive gameplay
-//! 2. Client sends inputs to server
-//! 3. Server simulates authoritatively and broadcasts updates
-//! 4. Client receives server state and reconciles:
-//!    - If server state matches prediction, no correction needed
-//!    - If mismatch, snap to server state and replay unacknowledged inputs
+//! With avian3d physics, collision resolution is handled by the physics engine,
+//! so we can't simply replay inputs to predict position. Instead, we:
+//! 1. Client predicts movement locally using avian3d for responsive gameplay
+//! 2. Client sends inputs to server  
+//! 3. Server simulates authoritatively and broadcasts position updates
+//! 4. Client receives server state and smoothly corrects toward it
 
 use bevy::prelude::*;
 use shared::messages::ServerToClientPlayerUpdate;
-use shared::physics::{player_step::apply_player_input_step, MovementMode, PhysicsState};
-use shared::world::realm::Realm;
+use shared::physics::{LinearVelocity, MovementMode};
 
-use crate::agents::{FreeFly, PlayerControlled, Velocity, Walking};
+use crate::agents::{FreeFly, PlayerControlled, Walking};
 use crate::network::CurrentPlayerProfile;
-use crate::world::ClientWorldMap;
 use shared::net::input_history::InputHistory;
 
 /// Threshold for position correction. If the difference between predicted and actual
 /// client position is less than this, we don't correct (to avoid jitter).
-/// This should be small enough to catch real drift but large enough to ignore
-/// floating point / timing differences.
 pub const POSITION_ERROR_IGNORE_THRESHOLD_METERS: f32 = 0.05;
 
 /// Maximum allowed position error before we force a hard snap (teleport).
@@ -33,8 +28,6 @@ pub const POSITION_ERROR_IGNORE_THRESHOLD_METERS: f32 = 0.05;
 pub const POSITION_ERROR_HARD_SNAP_THRESHOLD_METERS: f32 = 2.0;
 
 /// Interpolation factor for smooth corrections (0.0 = no correction, 1.0 = instant snap).
-/// Lower values = smoother but slower correction. Higher values = faster but more visible.
-/// Using a higher value (0.3) to correct drift more quickly during fast movement.
 pub const CORRECTION_LERP_FACTOR: f32 = 0.3;
 
 /// Plugin for client-side reconciliation
@@ -48,21 +41,19 @@ impl Plugin for ReconciliationPlugin {
 
 /// System that reconciles the local player's state with server updates.
 ///
-/// This is the core of client-side prediction reconciliation:
-/// 1. When we receive a server update for our player, compare with prediction
-/// 2. If there's a significant mismatch, correct our position
-/// 3. Replay any inputs that the server hasn't acknowledged yet
+/// Since avian3d handles collision resolution, we can't replay inputs to predict
+/// position. Instead, we smoothly correct the client's position toward the
+/// server's authoritative position.
 pub fn reconcile_player_state(
     mut ev_update: MessageReader<ServerToClientPlayerUpdate>,
     mut player_query: Query<
-        (&mut Transform, &mut Velocity, &Realm, Option<&FreeFly>),
+        (&mut Transform, &mut LinearVelocity, Option<&FreeFly>),
         With<PlayerControlled>,
     >,
     mut commands: Commands,
     player_entity: Query<Entity, With<PlayerControlled>>,
     current_player: Res<CurrentPlayerProfile>,
     mut input_history: ResMut<InputHistory>,
-    world: Res<ClientWorldMap>,
 ) {
     for event in ev_update.read() {
         // Only process updates for our own player
@@ -81,7 +72,7 @@ pub fn reconcile_player_state(
             );
         }
 
-        let Ok((mut transform, mut velocity, realm, free_fly_opt)) = player_query.single_mut()
+        let Ok((mut transform, mut linear_velocity, free_fly_opt)) = player_query.single_mut()
         else {
             warn!("No local player entity found for reconciliation");
             continue;
@@ -91,77 +82,47 @@ pub fn reconcile_player_state(
             continue;
         };
 
-        // Start from server's authoritative state and replay all unacknowledged inputs
-        // to compute where the client SHOULD be if prediction was perfect.
-        let mut predicted_state = PhysicsState {
-            position: event.position,
-            velocity: event.velocity,
-            movement_mode: event.movement_mode,
-            realm: *realm,
-            on_ground: false,
-        };
-
-        // Replay all unacknowledged inputs to get predicted position
-        for input in input_history.unacknowledged.iter() {
-            let delta_seconds = input.delta_ms as f32 / 1000.0;
-            let step = apply_player_input_step(
-                &*world,
-                &predicted_state,
-                &input.inputs,
-                &input.camera,
-                delta_seconds,
-            );
-
-            predicted_state.position = step.position;
-            predicted_state.velocity = step.velocity;
-            predicted_state.movement_mode = step.movement_mode;
-            predicted_state.on_ground = step.on_ground;
-        }
-
-        // Update ECS movement mode components based on predicted state (after replay)
-        let predicted_is_flying = predicted_state.movement_mode == MovementMode::Flying;
+        // Update movement mode if it differs
+        let server_is_flying = event.movement_mode == MovementMode::Flying;
         let client_is_flying = free_fly_opt.is_some();
 
-        if predicted_is_flying != client_is_flying {
-            if predicted_is_flying {
+        if server_is_flying != client_is_flying {
+            if server_is_flying {
                 commands.entity(entity).remove::<Walking>().insert(FreeFly);
             } else {
                 commands.entity(entity).remove::<FreeFly>().insert(Walking);
             }
-            info!("Movement mode corrected: flying={}", predicted_is_flying);
+            info!("Movement mode corrected: flying={}", server_is_flying);
         }
 
-        // Now compare the PREDICTED position (after replay) with the client's current position.
-        // If prediction is accurate, these should be very close, and no correction is needed.
-        // This is the key insight: we compare post-replay prediction, not raw server state.
-        let position_error = (predicted_state.position - transform.translation).length();
+        // Calculate position error
+        let position_error = (event.position - transform.translation).length();
 
         if position_error < POSITION_ERROR_IGNORE_THRESHOLD_METERS {
             // Prediction is accurate - no position correction needed
             // Just sync velocity to keep future predictions accurate
-            velocity.0 = predicted_state.velocity;
+            linear_velocity.0 = event.velocity.into();
             continue;
         }
 
         if position_error > POSITION_ERROR_HARD_SNAP_THRESHOLD_METERS {
-            // Large error - hard snap to predicted position
+            // Large error - hard snap to server position
             warn!(
-                "Large position error ({:.2}m), hard snapping to predicted position",
+                "Large position error ({:.2}m), hard snapping to server position",
                 position_error
             );
-            transform.translation = predicted_state.position;
-            velocity.0 = predicted_state.velocity;
+            transform.translation = event.position;
+            linear_velocity.0 = event.velocity.into();
         } else {
-            // Small error - smoothly correct toward predicted position
-            // Using lerp reduces visual jitter while still correcting drift
+            // Small error - smoothly correct toward server position
             debug!(
-                "Position error: {:.3}m (predicted vs actual), applying smooth correction",
+                "Position error: {:.3}m, applying smooth correction",
                 position_error,
             );
             transform.translation = transform
                 .translation
-                .lerp(predicted_state.position, CORRECTION_LERP_FACTOR);
-            velocity.0 = predicted_state.velocity;
+                .lerp(event.position, CORRECTION_LERP_FACTOR);
+            linear_velocity.0 = event.velocity.into();
         }
     }
 }

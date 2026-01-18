@@ -4,19 +4,21 @@ use std::net::{SocketAddr, UdpSocket};
 use std::time::{Duration, SystemTime};
 
 use bevy::app::ScheduleRunnerPlugin;
+use bevy::asset::AssetPlugin;
 use bevy::log::info;
 use bevy::prelude::*;
+use bevy::state::app::StatesPlugin;
 use bevy_renet::netcode::{
     NetcodeServerPlugin, NetcodeServerTransport, ServerAuthentication, ServerConfig,
 };
 use bevy_renet::renet::RenetServer;
 use bevy_renet::RenetServerPlugin;
 use crossbeam::channel;
+use shared::meshing::ChunkColliderPlugin;
+use shared::physics::SharedPhysicsPlugin;
 use shared::world::pos::pos3d::ChunkPos;
 use shared::world::world_rng::WorldRng;
 use shared::world::WorldSeed;
-use shared::physics::SharedPhysicsPlugin;
-use shared::meshing::ChunkColliderPlugin;
 use shared::{get_shared_renet_config, GameServerConfig, PROTOCOL_ID, TICKS_PER_SECOND};
 
 use crate::logging::{LogBroadcastPlugin, LogEventSender};
@@ -107,12 +109,16 @@ pub fn configure_server_app(
     let mut voxel_world = VoxelWorld::new(chunk_changes_tx);
     voxel_world.render_distance = config.game_config.broadcast_render_distance as u32;
 
-    // Minimal plugins for headless server
+    // Minimal plugins for headless server, plus asset loading for physics
     app.add_plugins(
         MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
             1.0 / TICKS_PER_SECOND as f64,
         ))),
     );
+
+    // Add asset and state plugins needed for avian3d physics
+    app.add_plugins(AssetPlugin::default());
+    app.add_plugins(StatesPlugin);
 
     // Optionally add log plugin (standalone server needs it, embedded doesn't)
     if config.add_log_plugin {
@@ -124,8 +130,8 @@ pub fn configure_server_app(
     app.add_plugins(RenetServerPlugin);
     app.add_plugins(NetcodeServerPlugin);
 
-    // Physics plugin (headless mode for server)
-    app.add_plugins(SharedPhysicsPlugin::server());
+    // Physics plugin for collision detection
+    app.add_plugins(SharedPhysicsPlugin);
 
     // Chunk collider plugin for physics
     app.add_plugins(ChunkColliderPlugin::<VoxelWorld>::default());
