@@ -8,6 +8,7 @@ use bevy::asset::AssetPlugin;
 use bevy::log::info;
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
+use bevy::scene::ScenePlugin;
 use bevy_renet::netcode::{
     NetcodeServerPlugin, NetcodeServerTransport, ServerAuthentication, ServerConfig,
 };
@@ -119,6 +120,9 @@ pub fn configure_server_app(
     // Add asset and state plugins needed for avian3d physics
     app.add_plugins(AssetPlugin::default());
     app.add_plugins(StatesPlugin);
+    app.add_plugins(ScenePlugin); // provides SceneSpawner resource required by avian3d collider backend
+    // Register Mesh assets so avian3d collider cache has an AssetEvent channel even headless
+    app.init_asset::<Mesh>();
 
     // Optionally add log plugin (standalone server needs it, embedded doesn't)
     if config.add_log_plugin {

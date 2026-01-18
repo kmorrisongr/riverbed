@@ -48,9 +48,13 @@ pub fn setup_load_thread(
                 loop {
                     // If to_load is empty, we block on player position updates to not waste resources
                     let player_pos_update = if to_load.is_empty() {
-                        player_pos_recv
-                            .recv()
-                            .expect("PlayerColumnUpdate channel is closed")
+                        match player_pos_recv.recv() {
+                            Ok(update) => update,
+                            Err(_) => {
+                                warn!("PlayerColumnUpdate channel is closed, stopping terrain thread");
+                                break 'outer;
+                            }
+                        }
                     } else {
                         match player_pos_recv.try_recv() {
                             Ok(update) => update,
@@ -95,6 +99,9 @@ pub fn setup_load_thread(
                     }
                 }
                 // Generate the closest column to any player
+                if to_load.is_empty() {
+                    continue;
+                }
                 let (closest_idx, _closest_col) = to_load
                     .iter()
                     .enumerate()
