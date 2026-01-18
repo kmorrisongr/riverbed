@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use bevy::{
     asset::RenderAssetUsages,
     log::info_span,
@@ -10,17 +8,14 @@ use bevy::{
 use binary_greedy_meshing as bgm;
 use shared::{
     block::{Block, Face},
-    world::{
-        pos::{linearize, pad_linearize, pos3d::ChunkPos},
-        CHUNKP_S3, CHUNK_S1, WATER_H,
-    },
+    meshing::extract_quads,
+    world::{pos::pos3d::ChunkPos, CHUNK_S1, WATER_H},
 };
 
 use crate::network::models::client_chunk::ClientChunk;
 
 use super::texture_array::TextureMapTrait;
 
-const MASK_XYZ: u64 = 0b111111_111111_111111;
 /// ## Compressed voxel vertex data
 /// first u32 (vertex dependant):
 ///     - chunk position: 3x6 bits (33 values)
@@ -42,25 +37,11 @@ fn color(r: f32, g: f32, b: f32) -> u32 {
 }
 
 impl ClientChunk {
-    pub fn voxel_data_lod(&self, lod: usize) -> Vec<u16> {
-        let voxels = self.data().unpack_u16();
-        if lod == 1 {
-            return voxels;
-        }
-        let mut res = vec![0; CHUNKP_S3];
-        for x in 0..CHUNK_S1 {
-            for y in 0..CHUNK_S1 {
-                for z in 0..CHUNK_S1 {
-                    let lod_i = pad_linearize(x / lod, y / lod, z / lod);
-                    if res[lod_i] == 0 {
-                        res[lod_i] = voxels[pad_linearize(x, y, z)];
-                    }
-                }
-            }
-        }
-        res
-    }
-
+    /// Create render meshes for each face of the chunk.
+    ///
+    /// This uses the shared greedy meshing code to extract quads, then converts
+    /// them to bevy render meshes with the appropriate vertex attributes.
+    ///
     /// Doesn't work with lod > 2, because chunks are of size 62 (to get to 64 with padding) and 62 = 2*31
     /// TODO: make it work with lod > 2 if necessary (by truncating quads)
     pub fn create_face_meshes(
@@ -70,54 +51,45 @@ impl ClientChunk {
         chunk_pos: ChunkPos,
     ) -> [Option<Mesh>; 6] {
         let cy = chunk_pos.y as usize * CHUNK_S1;
-        // Gathering binary greedy meshing input data
+
+        // Use shared greedy meshing to extract quads
         let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
-        let voxels = self.voxel_data_lod(lod);
-        let mut mesher: bgm::Mesher<CHUNK_S1> = bgm::Mesher::new();
+        let chunk_quads = extract_quads(self.inner(), lod);
         mesh_data_span.exit();
+
         let mesh_build_span = info_span!("mesh build", name = "mesh build").entered();
-        let transparents =
-            BTreeSet::from_iter(self.palette().iter().enumerate().filter_map(|(i, block)| {
-                if i != 0 && !block.is_opaque() {
-                    Some(i as u16)
-                } else {
-                    None
-                }
-            }));
-        mesher.mesh(&voxels, &transparents);
         let mut meshes = core::array::from_fn(|_| None);
-        for (face_n, quads) in mesher.quads.iter().enumerate() {
+
+        for (face_n, quads) in chunk_quads.faces.iter().enumerate() {
             let mut voxel_data: Vec<[u32; 2]> = Vec::with_capacity(quads.len() * 4);
             let face: Face = face_n.into();
-            let offset = face.quad_to_block();
             let mut kept_quads = 0;
+
             for quad in quads {
-                let voxel_i = quad.voxel_id() as usize;
-                let w = quad.width();
-                let h = quad.height();
-                let xyz = MASK_XYZ & quad.0;
-                let [x, y, z] = quad.xyz();
-                let block = self.palette()[voxel_i];
-                let neighbor_block = self.palette()[voxels[linearize(
-                    (offset[0] + x as i32 + 1) as usize,
-                    (offset[1] + y as i32 + 1) as usize,
-                    (offset[2] + z as i32 + 1) as usize,
-                )] as usize];
                 kept_quads += 1;
-                let layer = texture_map.get_texture_index(block, face) as u32;
-                let (mut r, mut g, mut b) = match (block, face) {
+                let layer = texture_map.get_texture_index(quad.block, face) as u32;
+
+                // Calculate color based on block type and underwater depth
+                let (mut r, mut g, mut b) = match (quad.block, face) {
                     (Block::GrassBlock, Face::Up) => (0.1, 0.9, 0.2),
                     (Block::SeaBlock, _) => (0.1, 0.3, 0.7),
                     (block, _) if block.is_foliage() => (0.1, 0.8, 0.1),
                     _ => (1., 1., 1.),
                 };
-                if neighbor_block == Block::SeaBlock {
-                    let dist_to_surface = (WATER_H as usize - cy - y as usize) as f32;
+
+                if quad.neighbor_block == Block::SeaBlock {
+                    let dist_to_surface = (WATER_H as usize - cy - quad.y as usize) as f32;
                     r *= (-dist_to_surface * 0.05).exp();
                     g *= (-dist_to_surface * 0.045).exp();
                     b *= (-dist_to_surface * 0.04).exp();
                 }
-                let vertices = face.vertices_packed(xyz as u32, w as u32, h as u32, lod as u32);
+
+                let vertices = face.vertices_packed(
+                    quad.xyz as u32,
+                    quad.width as u32,
+                    quad.height as u32,
+                    lod as u32,
+                );
                 let quad_info = (color(r, g, b) << 15) | (layer << 3) | face_n as u32;
                 voxel_data.extend_from_slice(&[
                     [vertices[0], quad_info],
@@ -126,6 +98,7 @@ impl ClientChunk {
                     [vertices[3], quad_info],
                 ]);
             }
+
             let indices = bgm::indices(kept_quads);
             meshes[face_n] = Some(
                 Mesh::new(
@@ -136,6 +109,7 @@ impl ClientChunk {
                 .with_inserted_indices(Indices::U32(indices)),
             )
         }
+
         mesh_build_span.exit();
         meshes
     }

@@ -1,0 +1,177 @@
+//! Greedy meshing for voxel chunk data.
+//!
+//! This module extracts quads from chunk voxel data using the binary greedy meshing
+//! algorithm. The extracted quads can then be converted to either render meshes
+//! (on the client) or collision meshes (for avian3d physics).
+
+use std::collections::BTreeSet;
+
+use binary_greedy_meshing as bgm;
+
+use crate::block::{Block, Face};
+use crate::world::chunk::Chunk;
+use crate::world::pos::{linearize, pad_linearize};
+use crate::world::utils::Palette;
+use crate::world::{CHUNKP_S3, CHUNK_S1};
+
+/// Data for a single quad extracted from greedy meshing.
+#[derive(Debug, Clone, Copy)]
+pub struct QuadData {
+    /// The packed xyz position of the quad
+    pub xyz: u64,
+    /// X coordinate
+    pub x: u8,
+    /// Y coordinate
+    pub y: u8,
+    /// Z coordinate
+    pub z: u8,
+    /// Width of the quad
+    pub width: u8,
+    /// Height of the quad
+    pub height: u8,
+    /// Index into the palette for the voxel
+    pub voxel_index: usize,
+    /// The block type
+    pub block: Block,
+    /// The neighbor block (block in front of this face)
+    pub neighbor_block: Block,
+}
+
+/// Quads extracted from a chunk, organized by face direction.
+pub struct ChunkQuads {
+    /// Quads for each of the 6 faces (Left, Down, Back, Right, Up, Front)
+    pub faces: [Vec<QuadData>; 6],
+    /// Reference to the chunk's palette
+    palette: Palette<Block>,
+}
+
+impl ChunkQuads {
+    /// Get quads for a specific face
+    pub fn get_face(&self, face: Face) -> &[QuadData] {
+        &self.faces[face as usize]
+    }
+
+    /// Get the palette used for this chunk
+    pub fn palette(&self) -> &Palette<Block> {
+        &self.palette
+    }
+
+    /// Check if all faces have no quads (empty chunk)
+    pub fn is_empty(&self) -> bool {
+        self.faces.iter().all(|f| f.is_empty())
+    }
+
+    /// Total number of quads across all faces
+    pub fn total_quads(&self) -> usize {
+        self.faces.iter().map(|f| f.len()).sum()
+    }
+}
+
+/// Extract quads from a chunk using greedy meshing.
+///
+/// This performs the binary greedy meshing algorithm on the chunk data,
+/// producing a set of quads for each face direction. These quads can then
+/// be converted to render meshes or collision meshes.
+///
+/// # Arguments
+/// * `chunk` - The chunk to mesh
+/// * `lod` - Level of detail (1 = full detail, 2 = half, etc.)
+///
+/// # Returns
+/// A `ChunkQuads` containing the extracted quads organized by face.
+pub fn extract_quads(chunk: &Chunk, lod: usize) -> ChunkQuads {
+    let voxels = voxel_data_lod(chunk, lod);
+    let palette = chunk.palette.clone();
+
+    let mut mesher: bgm::Mesher<CHUNK_S1> = bgm::Mesher::new();
+
+    // Build set of transparent block indices for the mesher
+    let transparents =
+        BTreeSet::from_iter(palette.iter().enumerate().filter_map(|(i, block)| {
+            if i != 0 && !block.is_opaque() {
+                Some(i as u16)
+            } else {
+                None
+            }
+        }));
+
+    mesher.mesh(&voxels, &transparents);
+
+    let mut faces: [Vec<QuadData>; 6] = core::array::from_fn(|_| Vec::new());
+
+    for (face_n, quads) in mesher.quads.iter().enumerate() {
+        let face: Face = face_n.into();
+        let offset = face.quad_to_block();
+
+        for quad in quads {
+            let voxel_i = quad.voxel_id() as usize;
+            let [x, y, z] = quad.xyz();
+
+            let block = palette[voxel_i];
+            let neighbor_block = palette[voxels[linearize(
+                (offset[0] + x as i32 + 1) as usize,
+                (offset[1] + y as i32 + 1) as usize,
+                (offset[2] + z as i32 + 1) as usize,
+            )] as usize];
+
+            faces[face_n].push(QuadData {
+                xyz: quad.0 & MASK_XYZ,
+                x: x as u8,
+                y: y as u8,
+                z: z as u8,
+                width: quad.width() as u8,
+                height: quad.height() as u8,
+                voxel_index: voxel_i,
+                block,
+                neighbor_block,
+            });
+        }
+    }
+
+    ChunkQuads { faces, palette }
+}
+
+/// Mask to extract XYZ from packed quad data
+const MASK_XYZ: u64 = 0b111111_111111_111111;
+
+/// Convert chunk data to voxel array with LOD support.
+fn voxel_data_lod(chunk: &Chunk, lod: usize) -> Vec<u16> {
+    let voxels = chunk.data.unpack_u16();
+    if lod == 1 {
+        return voxels;
+    }
+
+    let mut res = vec![0; CHUNKP_S3];
+    for x in 0..CHUNK_S1 {
+        for y in 0..CHUNK_S1 {
+            for z in 0..CHUNK_S1 {
+                let lod_i = pad_linearize(x / lod, y / lod, z / lod);
+                if res[lod_i] == 0 {
+                    res[lod_i] = voxels[pad_linearize(x, y, z)];
+                }
+            }
+        }
+    }
+    res
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_quads_empty_chunk() {
+        let chunk = Chunk::new();
+        let quads = extract_quads(&chunk, 1);
+        assert!(quads.is_empty());
+    }
+
+    #[test]
+    fn test_extract_quads_single_block() {
+        let mut chunk = Chunk::new();
+        chunk.set((1, 1, 1), Block::Stone);
+        let quads = extract_quads(&chunk, 1);
+        // A single block should produce 6 quads (one per face)
+        assert_eq!(quads.total_quads(), 6);
+    }
+}

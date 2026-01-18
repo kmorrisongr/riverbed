@@ -7,7 +7,7 @@ use shared::{
 };
 
 #[derive(Debug)]
-pub struct ClientChunk(Chunk);
+pub struct ClientChunk(pub(crate) Chunk);
 
 impl ClientChunk {
     pub fn from_network_chunk(chunk: Chunk) -> Self {
@@ -28,6 +28,11 @@ impl ClientChunk {
 
     pub fn palette(&self) -> &Palette<Block> {
         &self.0.palette
+    }
+
+    /// Get access to the inner Chunk for shared operations
+    pub fn inner(&self) -> &Chunk {
+        &self.0
     }
 }
 

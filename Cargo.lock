@@ -5242,6 +5242,7 @@ dependencies = [
  "avian3d",
  "bevy",
  "bevy_renet",
+ "binary-greedy-meshing",
  "bincode",
  "cfg-if",
  "chrono",
