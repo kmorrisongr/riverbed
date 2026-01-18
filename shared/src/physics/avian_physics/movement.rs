@@ -1,10 +1,10 @@
 //! Movement and kinematics shared by client and server, with avian3d resolving collisions.
 
 use avian3d::prelude::LinearVelocity;
-use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::{FLY_SPEED, FLY_VERTICAL_SPEED, WALK_SPEED};
+use crate::messages::{ActionMask, TransmittableAction};
 
 // =============================================================================
 // Player Physics Constants
@@ -167,10 +167,9 @@ pub fn compute_desired_velocity(
 
 /// Convert transmittable actions to camera-relative movement input.
 pub fn actions_to_camera_relative_input(
-    inputs: &HashSet<crate::messages::TransmittableAction>,
+    inputs: &ActionMask,
     camera_transform: &Transform,
 ) -> MovementInput {
-    use crate::messages::TransmittableAction;
 
     let forward = camera_transform.forward().as_vec3();
     let right = camera_transform.right().as_vec3();
@@ -179,16 +178,23 @@ pub fn actions_to_camera_relative_input(
     let mut jump = false;
     let mut crouch = false;
 
-    for action in inputs {
-        match action {
-            TransmittableAction::MoveForward => input_axes.z += 1.0,
-            TransmittableAction::MoveBackward => input_axes.z -= 1.0,
-            TransmittableAction::MoveRight => input_axes.x += 1.0,
-            TransmittableAction::MoveLeft => input_axes.x -= 1.0,
-            TransmittableAction::JumpOrFlyUp => jump = true,
-            TransmittableAction::CrouchOrFlyDown => crouch = true,
-            _ => {}
-        }
+    if inputs.contains(TransmittableAction::MoveForward) {
+        input_axes.z += 1.0;
+    }
+    if inputs.contains(TransmittableAction::MoveBackward) {
+        input_axes.z -= 1.0;
+    }
+    if inputs.contains(TransmittableAction::MoveRight) {
+        input_axes.x += 1.0;
+    }
+    if inputs.contains(TransmittableAction::MoveLeft) {
+        input_axes.x -= 1.0;
+    }
+    if inputs.contains(TransmittableAction::JumpOrFlyUp) {
+        jump = true;
+    }
+    if inputs.contains(TransmittableAction::CrouchOrFlyDown) {
+        crouch = true;
     }
 
     MovementInput {
@@ -205,14 +211,14 @@ pub fn compute_movement_step_from_actions(
     velocity: Vec3,
     mut movement_mode: MovementMode,
     on_ground: bool,
-    actions: &HashSet<crate::messages::TransmittableAction>,
+    actions: &ActionMask,
     camera: &Transform,
     delta_seconds: f32,
 ) -> MovementStepResult {
     let mut current_velocity = velocity;
 
     // Handle fly-mode toggle
-    if actions.contains(&crate::messages::TransmittableAction::ToggleFlyMode) {
+    if actions.contains(TransmittableAction::ToggleFlyMode) {
         movement_mode = match movement_mode {
             MovementMode::Walking => MovementMode::Flying,
             MovementMode::Flying => MovementMode::Walking,
@@ -249,7 +255,7 @@ pub fn apply_movement_step_to_components(
     linear_velocity: &mut LinearVelocity,
     movement_mode: &mut MovementMode,
     on_ground: bool,
-    actions: &HashSet<crate::messages::TransmittableAction>,
+    actions: &ActionMask,
     camera: &Transform,
     delta_seconds: f32,
 ) -> MovementStepResult {
@@ -274,6 +280,7 @@ pub fn apply_movement_step_to_components(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::messages::TransmittableAction;
 
     #[test]
     fn test_velocity_computation_walking() {
@@ -327,5 +334,13 @@ mod tests {
 
         // Should have upward velocity
         assert_eq!(new_velocity.y, FLY_VERTICAL_SPEED);
+    }
+
+    #[test]
+    fn test_action_mask_contains() {
+        let mut mask = ActionMask::default();
+        mask.insert(TransmittableAction::MoveForward);
+        assert!(mask.contains(TransmittableAction::MoveForward));
+        assert!(!mask.contains(TransmittableAction::MoveBackward));
     }
 }
