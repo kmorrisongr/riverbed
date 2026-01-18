@@ -52,15 +52,16 @@ pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
     inventory.try_add(Stack::Some(Item::Block(Block::Smelter), 1));
     inventory.try_add(Stack::Some(Item::Coal, 20));
     inventory.try_add(Stack::Some(Item::IronOre, 50));
+    let transform = Transform {
+        translation: DEFAULT_SPAWN_POSITION,
+        ..default()
+    };
     commands
         .spawn((
-            Transform {
-                translation: DEFAULT_SPAWN_POSITION,
-                ..default()
-            },
+            transform,
             Visibility::default(),
             realm,
-            DynamicPlayerPhysicsBundle::new(),
+            DynamicPlayerPhysicsBundle::from_transform(&transform),
             TargetBlock(None),
             ItemHolder::Inventory(inventory),
             PlayerControlled,

@@ -26,6 +26,8 @@ pub struct DynamicPlayerPhysicsBundle {
     pub friction: Friction,
     pub restitution: Restitution,
     pub ccd: SweptCcd,
+    pub position: Position,
+    pub rotation: Rotation,
     // Movement state components (shared with ground detection systems)
     pub movement_mode: MovementMode,
     pub on_ground: OnGround,
@@ -50,11 +52,21 @@ impl DynamicPlayerPhysicsBundle {
             restitution: Restitution::new(0.0),
             // Enable continuous collision detection for fast movement
             ccd: SweptCcd::default(),
+            position: Position::default(),
+            rotation: Rotation::default(),
             // Movement state defaults
             movement_mode: MovementMode::default(),
             on_ground: OnGround::default(),
             stepping_on: SteppingOn::default(),
         }
+    }
+
+    /// Create the bundle positioned/oriented to match an existing Transform.
+    pub fn from_transform(transform: &Transform) -> Self {
+        let mut bundle = Self::new();
+        bundle.position = Position(transform.translation);
+        bundle.rotation = Rotation(transform.rotation);
+        bundle
     }
 }
 
