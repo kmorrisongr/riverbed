@@ -6,9 +6,9 @@
 //! via events.
 
 use bevy::prelude::*;
-use bevy::tasks::{AsyncComputeTaskPool, Task, futures_lite};
+use bevy::tasks::{futures_lite, AsyncComputeTaskPool, Task};
 use futures_lite::future::poll_once;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::world::chunk::Chunk;
 use crate::world::pos::pos2d::chunks_in_col;
@@ -43,6 +43,12 @@ pub struct ChunkColliderCookTasks {
     pub tasks: HashMap<ChunkPos, Task<Option<StaticChunkColliderBundle>>>,
 }
 
+/// Pending chunk positions waiting to be cooked (coalesced per chunk).
+#[derive(Resource, Default)]
+pub struct ChunkColliderPending {
+    pub pending: HashSet<ChunkPos>,
+}
+
 /// Trait for accessing chunk data. Implemented by both ClientWorldMap and VoxelWorld.
 pub trait ChunkProvider: Send + Sync + 'static {
     /// Get a chunk if it exists, returning a clone for thread safety.
@@ -56,26 +62,36 @@ const MAX_NEW_COOK_TASKS_PER_TICK: usize = 8;
 pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
     mut events: MessageReader<ChunkColliderRebuildRequest>,
     chunk_provider: Option<Res<P>>,
+    mut pending: ResMut<ChunkColliderPending>,
     mut cook_tasks: ResMut<ChunkColliderCookTasks>,
 ) {
     let Some(chunk_provider) = chunk_provider else {
         return;
     };
 
+    // Coalesce incoming events; we only need one pending entry per chunk.
+    for event in events.read() {
+        pending.pending.insert(event.chunk_pos);
+    }
+
     let pool = AsyncComputeTaskPool::get();
     let mut spawned = 0usize;
 
-    for event in events.read() {
-        if spawned >= MAX_NEW_COOK_TASKS_PER_TICK {
-            break;
-        }
+    // Start up to the frame budget from the pending set, skipping chunks already cooking
+    let mut to_start: Vec<ChunkPos> = pending
+        .pending
+        .iter()
+        .filter(|pos| !cook_tasks.tasks.contains_key(*pos))
+        .cloned()
+        .take(MAX_NEW_COOK_TASKS_PER_TICK)
+        .collect();
 
-        let chunk_pos = event.chunk_pos;
-
+    for chunk_pos in to_start.drain(..) {
         // Replace any in-flight task for the same chunk with the latest request
         cook_tasks.tasks.remove(&chunk_pos);
 
         let Some(chunk) = chunk_provider.get_chunk(chunk_pos) else {
+            // Keep pending if chunk not available; will retry later
             continue;
         };
 
@@ -85,7 +101,12 @@ pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
         });
 
         cook_tasks.tasks.insert(chunk_pos, task);
+        pending.pending.remove(&chunk_pos);
         spawned += 1;
+
+        if spawned >= MAX_NEW_COOK_TASKS_PER_TICK {
+            break;
+        }
     }
 }
 
@@ -127,11 +148,13 @@ pub fn despawn_colliders_for_unloaded_columns(
     mut commands: Commands,
     mut events: MessageReader<ColUnloadEvent>,
     mut collider_entities: ResMut<ChunkColliderEntityRegistry>,
+    mut pending: ResMut<ChunkColliderPending>,
     mut cook_tasks: ResMut<ChunkColliderCookTasks>,
 ) {
     for event in events.read() {
         for chunk_pos in chunks_in_col(&event.0) {
-            // Cancel any in-flight cook task for this chunk
+            // Cancel any pending or in-flight cook task for this chunk
+            pending.pending.remove(&chunk_pos);
             cook_tasks.tasks.remove(&chunk_pos);
 
             if let Some(entity) = collider_entities.entities.remove(&chunk_pos) {
@@ -161,6 +184,7 @@ impl<P: ChunkProvider + Resource> Default for ChunkColliderPlugin<P> {
 impl<P: ChunkProvider + Resource> Plugin for ChunkColliderPlugin<P> {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChunkColliderEntityRegistry>()
+            .init_resource::<ChunkColliderPending>()
             .init_resource::<ChunkColliderCookTasks>()
             .add_message::<ChunkColliderRebuildRequest>()
             .add_systems(Update, queue_collider_cook_tasks::<P>)
