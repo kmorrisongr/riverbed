@@ -22,8 +22,8 @@ pub use avian3d::prelude::{
 // Re-export core physics types and functions from the avian integration
 pub use avian_physics::{
     actions_to_movement_input, check_on_ground, compute_desired_velocity, get_stepped_block,
-    MovementInput, MovementMode, PhysicsState, PhysicsStepResult, PlayerPhysicsBundle,
-    SharedPhysicsPlugin, ACC_MULT, PLAYER_AABB, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS,
-    PLAYER_GRAVITY, PLAYER_HALF_EXTENTS, PLAYER_JUMP_FORCE,
+    sync_movement_mode_components, FreeFly, MovementInput, MovementMode, PhysicsState,
+    PhysicsStepResult, PlayerPhysicsBundle, SharedPhysicsPlugin, Walking, ACC_MULT, PLAYER_AABB,
+    PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS, PLAYER_GRAVITY, PLAYER_JUMP_FORCE,
 };
 

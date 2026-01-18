@@ -146,13 +146,13 @@ pub fn handle_player_inputs_system(
         }
 
         let delta_seconds = ev.input.delta_ms as f32 / 1000.0;
-        let state = PhysicsState {
-            position: transform.translation,
-            velocity: Vec3::from(linear_velocity.0),
-            movement_mode: physics_state.movement_mode,
-            realm: *realm,
-            on_ground: physics_state.on_ground,
-        };
+        let state = PhysicsState::from_components(
+            transform.translation,
+            Vec3::from(linear_velocity.0),
+            physics_state.movement_mode,
+            *realm,
+            physics_state.on_ground,
+        );
 
         let step = apply_player_input_step(
             &state,

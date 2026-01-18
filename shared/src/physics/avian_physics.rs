@@ -28,8 +28,6 @@ pub const PLAYER_CAPSULE_RADIUS: f32 = 0.3;
 pub const PLAYER_CAPSULE_HEIGHT: f32 = 1.1; // Total height = height + 2*radius = 1.7
 /// Player AABB full size (for ground detection queries)
 pub const PLAYER_AABB: Vec3 = Vec3::new(0.6, 1.7, 0.6);
-/// Player collision box half-extents (legacy, kept for compatibility)
-pub const PLAYER_HALF_EXTENTS: Vec3 = Vec3::new(0.3, 0.85, 0.3);
 /// Acceleration multiplier for ground movement
 pub const ACC_MULT: f32 = 150.0;
 
@@ -97,6 +95,23 @@ impl PhysicsState {
         }
     }
 
+    /// Build a physics state from components (common pattern in systems)
+    pub fn from_components(
+        position: Vec3,
+        velocity: Vec3,
+        movement_mode: MovementMode,
+        realm: Realm,
+        on_ground: bool,
+    ) -> Self {
+        Self {
+            position,
+            velocity,
+            movement_mode,
+            realm,
+            on_ground,
+        }
+    }
+
     /// Convert to avian3d Position component
     pub fn to_position(&self) -> Position {
         Position(self.position.into())
@@ -105,16 +120,6 @@ impl PhysicsState {
     /// Convert to avian3d LinearVelocity component
     pub fn to_linear_velocity(&self) -> LinearVelocity {
         LinearVelocity(self.velocity.into())
-    }
-
-    /// Update from avian3d Position component
-    pub fn set_from_position(&mut self, pos: &Position) {
-        self.position = pos.0.into();
-    }
-
-    /// Update from avian3d LinearVelocity component
-    pub fn set_from_linear_velocity(&mut self, vel: &LinearVelocity) {
-        self.velocity = vel.0.into();
     }
 }
 
@@ -356,6 +361,39 @@ pub fn actions_to_movement_input(
         crouch,
         camera_forward: forward,
         camera_right: right,
+    }
+}
+
+// =============================================================================
+// Movement Mode Marker Components
+// =============================================================================
+
+/// Marker component for walking movement mode
+#[derive(Component)]
+pub struct Walking;
+
+/// Marker component for flying movement mode
+#[derive(Component)]
+pub struct FreeFly;
+
+/// Sync movement mode marker components on an entity.
+///
+/// This helper ensures the `Walking`/`FreeFly` marker components match the
+/// `MovementMode` value. Call this after computing physics to keep ECS state
+/// consistent.
+pub fn sync_movement_mode_components(
+    commands: &mut Commands,
+    entity: Entity,
+    new_mode: MovementMode,
+    was_flying: bool,
+) {
+    let new_is_flying = new_mode == MovementMode::Flying;
+    if new_is_flying != was_flying {
+        if new_is_flying {
+            commands.entity(entity).remove::<Walking>().insert(FreeFly);
+        } else {
+            commands.entity(entity).remove::<FreeFly>().insert(Walking);
+        }
     }
 }
 

@@ -7,8 +7,8 @@
 
 use bevy::prelude::*;
 use shared::physics::{
-    get_stepped_block, player_step::apply_player_input_step, LinearVelocity, MovementMode,
-    PhysicsState, PLAYER_AABB,
+    get_stepped_block, player_step::apply_player_input_step, sync_movement_mode_components,
+    FreeFly, LinearVelocity, MovementMode, PhysicsState, PLAYER_AABB,
 };
 use shared::world::realm::Realm;
 
@@ -35,13 +35,8 @@ pub struct SteppingOn(pub Block);
 #[derive(Component)]
 pub struct Crouching(pub bool);
 
-/// Marker component for walking movement mode
-#[derive(Component)]
-pub struct Walking;
-
-/// Marker component for flying movement mode
-#[derive(Component)]
-pub struct FreeFly;
+// Re-export shared Walking component for backwards compatibility
+pub use shared::physics::Walking;
 
 /// Tracks the on_ground state for physics calculations
 #[derive(Component, Default)]
@@ -95,7 +90,8 @@ fn apply_movement_input(
     let camera_transform = camera_query.single().copied().unwrap_or_default();
 
     // Build current physics state
-    let current_mode = if free_fly_opt.is_some() {
+    let was_flying = free_fly_opt.is_some();
+    let current_mode = if was_flying {
         MovementMode::Flying
     } else {
         MovementMode::Walking
@@ -103,13 +99,13 @@ fn apply_movement_input(
 
     let on_ground = on_ground_opt.map(|og| og.0).unwrap_or(false);
 
-    let state = PhysicsState {
-        position: transform.translation,
-        velocity: Vec3::from(linear_velocity.0),
-        movement_mode: current_mode,
-        realm: *realm,
+    let state = PhysicsState::from_components(
+        transform.translation,
+        Vec3::from(linear_velocity.0),
+        current_mode,
+        *realm,
         on_ground,
-    };
+    );
 
     // Compute desired velocity
     let delta_seconds = time.delta_secs();
@@ -129,14 +125,5 @@ fn apply_movement_input(
     }
 
     // Sync movement mode ECS components if changed
-    let new_is_flying = step.movement_mode == MovementMode::Flying;
-    let was_flying = free_fly_opt.is_some();
-
-    if new_is_flying != was_flying {
-        if new_is_flying {
-            commands.entity(entity).remove::<Walking>().insert(FreeFly);
-        } else {
-            commands.entity(entity).remove::<FreeFly>().insert(Walking);
-        }
-    }
+    sync_movement_mode_components(&mut commands, entity, step.movement_mode, was_flying);
 }

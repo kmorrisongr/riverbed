@@ -13,9 +13,9 @@
 
 use bevy::prelude::*;
 use shared::messages::ServerToClientPlayerUpdate;
-use shared::physics::{LinearVelocity, MovementMode};
+use shared::physics::{sync_movement_mode_components, FreeFly, LinearVelocity, MovementMode};
 
-use crate::agents::{FreeFly, PlayerControlled, Walking};
+use crate::agents::PlayerControlled;
 use crate::network::CurrentPlayerProfile;
 use shared::net::input_history::InputHistory;
 
@@ -87,11 +87,7 @@ pub fn reconcile_player_state(
         let client_is_flying = free_fly_opt.is_some();
 
         if server_is_flying != client_is_flying {
-            if server_is_flying {
-                commands.entity(entity).remove::<Walking>().insert(FreeFly);
-            } else {
-                commands.entity(entity).remove::<FreeFly>().insert(Walking);
-            }
+            sync_movement_mode_components(&mut commands, entity, event.movement_mode, client_is_flying);
             info!("Movement mode corrected: flying={}", server_is_flying);
         }
 

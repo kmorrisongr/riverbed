@@ -57,13 +57,13 @@ pub fn apply_player_input_step(
 
     let movement_input = actions_to_movement_input(actions, camera);
 
-    let sim_state = PhysicsState {
-        position: state.position,
+    let sim_state = PhysicsState::from_components(
+        state.position,
         velocity,
         movement_mode,
-        realm: state.realm,
-        on_ground: state.on_ground,
-    };
+        state.realm,
+        state.on_ground,
+    );
 
     let result = compute_desired_velocity(&sim_state, &movement_input, delta_seconds);
 
