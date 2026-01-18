@@ -6,9 +6,9 @@
 //! via events.
 
 use bevy::prelude::*;
-use bevy::tasks::{futures_lite, AsyncComputeTaskPool, Task};
-use futures_lite::future::poll_once;
+use crossbeam::channel::{bounded, unbounded, Receiver, Sender, TrySendError};
 use std::collections::{HashMap, HashSet};
+use std::thread::Builder;
 
 use crate::world::chunk::Chunk;
 use crate::world::pos::pos2d::chunks_in_col;
@@ -37,16 +37,32 @@ pub struct ChunkColliderEntityRegistry {
     pub entities: HashMap<ChunkPos, Entity>,
 }
 
-/// In-flight collider cook tasks keyed by chunk position.
+/// Chunks that are currently being cooked by the worker.
 #[derive(Resource, Default)]
-pub struct ChunkColliderCookTasks {
-    pub tasks: HashMap<ChunkPos, Task<Option<StaticChunkColliderBundle>>>,
+pub struct ChunkColliderInFlight {
+    pub in_flight: HashSet<ChunkPos>,
 }
 
 /// Pending chunk positions waiting to be cooked (coalesced per chunk).
 #[derive(Resource, Default)]
 pub struct ChunkColliderPending {
     pub pending: HashSet<ChunkPos>,
+}
+
+#[derive(Resource)]
+pub struct ChunkColliderJobSender(pub Sender<ChunkColliderJob>);
+
+#[derive(Resource)]
+pub struct ChunkColliderResultReceiver(pub Receiver<ChunkColliderResult>);
+
+struct ChunkColliderJob {
+    chunk_pos: ChunkPos,
+    chunk: Chunk,
+}
+
+struct ChunkColliderResult {
+    chunk_pos: ChunkPos,
+    bundle: Option<StaticChunkColliderBundle>,
 }
 
 /// Trait for accessing chunk data. Implemented by both ClientWorldMap and VoxelWorld.
@@ -57,13 +73,46 @@ pub trait ChunkProvider: Send + Sync + 'static {
 
 /// Maximum number of new collider cook tasks to start per frame.
 const MAX_NEW_COOK_TASKS_PER_TICK: usize = 8;
+/// Capacity for the collider worker's input queue.
+const COLLIDER_QUEUE_CAPACITY: usize = 64;
+
+fn setup_collider_worker(mut commands: Commands) {
+    let (job_sender, job_receiver) = bounded::<ChunkColliderJob>(COLLIDER_QUEUE_CAPACITY);
+    let (result_sender, result_receiver) = unbounded::<ChunkColliderResult>();
+
+    // Dedicated worker to cook colliders without competing for the global async pool.
+    Builder::new()
+        .name("collider-worker".into())
+        .spawn(move || {
+            while let Ok(job) = job_receiver.recv() {
+                let bundle = generate_chunk_trimesh_collider(&job.chunk)
+                    .map(|collider| StaticChunkColliderBundle::from_collider(collider, job.chunk_pos));
+
+                if result_sender
+                    .send(ChunkColliderResult {
+                        chunk_pos: job.chunk_pos,
+                        bundle,
+                    })
+                    .is_err()
+                {
+                    // Main thread went away; exit the worker.
+                    break;
+                }
+            }
+        })
+        .expect("collider worker thread spawn");
+
+    commands.insert_resource(ChunkColliderJobSender(job_sender));
+    commands.insert_resource(ChunkColliderResultReceiver(result_receiver));
+}
 
 /// System that enqueues asynchronous collider cook tasks for chunk rebuild requests.
 pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
     mut events: MessageReader<ChunkColliderRebuildRequest>,
     chunk_provider: Option<Res<P>>,
     mut pending: ResMut<ChunkColliderPending>,
-    mut cook_tasks: ResMut<ChunkColliderCookTasks>,
+    mut in_flight: ResMut<ChunkColliderInFlight>,
+    job_sender: Res<ChunkColliderJobSender>,
 ) {
     let Some(chunk_provider) = chunk_provider else {
         return;
@@ -74,35 +123,39 @@ pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
         pending.pending.insert(event.chunk_pos);
     }
 
-    let pool = AsyncComputeTaskPool::get();
     let mut spawned = 0usize;
 
     // Start up to the frame budget from the pending set, skipping chunks already cooking
     let mut to_start: Vec<ChunkPos> = pending
         .pending
         .iter()
-        .filter(|pos| !cook_tasks.tasks.contains_key(*pos))
+        .filter(|pos| !in_flight.in_flight.contains(*pos))
         .cloned()
         .take(MAX_NEW_COOK_TASKS_PER_TICK)
         .collect();
 
     for chunk_pos in to_start.drain(..) {
-        // Replace any in-flight task for the same chunk with the latest request
-        cook_tasks.tasks.remove(&chunk_pos);
-
         let Some(chunk) = chunk_provider.get_chunk(chunk_pos) else {
             // Keep pending if chunk not available; will retry later
             continue;
         };
 
-        let task = pool.spawn(async move {
-            generate_chunk_trimesh_collider(&chunk)
-                .map(|collider| StaticChunkColliderBundle::from_collider(collider, chunk_pos))
-        });
-
-        cook_tasks.tasks.insert(chunk_pos, task);
-        pending.pending.remove(&chunk_pos);
-        spawned += 1;
+        match job_sender.0.try_send(ChunkColliderJob { chunk_pos, chunk }) {
+            Ok(()) => {
+                pending.pending.remove(&chunk_pos);
+                in_flight.in_flight.insert(chunk_pos);
+                spawned += 1;
+            }
+            Err(TrySendError::Full(_)) => {
+                // Worker queue is full; keep pending and try again next tick
+                warn!("Collider worker queue is full; deferring new jobs");
+                break;
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                warn!("Collider worker thread is disconnected; dropping job for {chunk_pos:?}");
+                break;
+            }
+        }
 
         if spawned >= MAX_NEW_COOK_TASKS_PER_TICK {
             break;
@@ -113,18 +166,15 @@ pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
 /// System that applies finished collider cook tasks, spawning/despawning entities on the main thread.
 pub fn apply_finished_collider_cooks(
     mut commands: Commands,
-    mut cook_tasks: ResMut<ChunkColliderCookTasks>,
     mut collider_entities: ResMut<ChunkColliderEntityRegistry>,
+    mut in_flight: ResMut<ChunkColliderInFlight>,
+    results: Option<Res<ChunkColliderResultReceiver>>,
 ) {
-    let mut finished = Vec::new();
+    let Some(results) = results else {
+        return;
+    };
 
-    for (chunk_pos, task) in cook_tasks.tasks.iter_mut() {
-        if let Some(result) = futures_lite::future::block_on(poll_once(task)) {
-            finished.push((*chunk_pos, result));
-        }
-    }
-
-    for (chunk_pos, bundle) in finished {
+    for ChunkColliderResult { chunk_pos, bundle } in results.0.try_iter() {
         // Remove old collider entity if present
         if let Some(old_entity) = collider_entities.entities.remove(&chunk_pos) {
             commands.entity(old_entity).despawn();
@@ -136,8 +186,8 @@ pub fn apply_finished_collider_cooks(
             collider_entities.entities.insert(chunk_pos, entity);
         }
 
-        // Drop completed task
-        cook_tasks.tasks.remove(&chunk_pos);
+        // Mark job complete
+        in_flight.in_flight.remove(&chunk_pos);
     }
 }
 
@@ -149,13 +199,13 @@ pub fn despawn_colliders_for_unloaded_columns(
     mut events: MessageReader<ColUnloadEvent>,
     mut collider_entities: ResMut<ChunkColliderEntityRegistry>,
     mut pending: ResMut<ChunkColliderPending>,
-    mut cook_tasks: ResMut<ChunkColliderCookTasks>,
+    mut in_flight: ResMut<ChunkColliderInFlight>,
 ) {
     for event in events.read() {
         for chunk_pos in chunks_in_col(&event.0) {
             // Cancel any pending or in-flight cook task for this chunk
             pending.pending.remove(&chunk_pos);
-            cook_tasks.tasks.remove(&chunk_pos);
+            in_flight.in_flight.remove(&chunk_pos);
 
             if let Some(entity) = collider_entities.entities.remove(&chunk_pos) {
                 commands.entity(entity).despawn();
@@ -185,7 +235,8 @@ impl<P: ChunkProvider + Resource> Plugin for ChunkColliderPlugin<P> {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChunkColliderEntityRegistry>()
             .init_resource::<ChunkColliderPending>()
-            .init_resource::<ChunkColliderCookTasks>()
+            .init_resource::<ChunkColliderInFlight>()
+            .add_systems(Startup, setup_collider_worker)
             .add_message::<ChunkColliderRebuildRequest>()
             .add_systems(
                 Update,

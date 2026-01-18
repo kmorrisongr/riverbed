@@ -3,7 +3,6 @@ use crate::render::mesh_draw::{choose_lod_level, LOD};
 use crate::render::texture_array::TextureMap;
 use crate::world::ClientWorldMap;
 use bevy::prelude::*;
-use bevy::tasks::AsyncComputeTaskPool;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use parking_lot::RwLock;
 use shared::block::Face;
@@ -22,15 +21,15 @@ pub fn setup_mesh_thread(
     shared_load_area: Res<SharedPlayerCol>,
     mesh_order_receiver: Res<MeshOrderReceiver>,
 ) {
-    let thread_pool = AsyncComputeTaskPool::get();
     let chunks = world.chunks.clone();
     let (mesh_sender, mesh_reciever) = unbounded();
     commands.insert_resource(MeshReciever(mesh_reciever));
     let texture_map = texture_map.0.clone();
     let mesh_order_receiver = mesh_order_receiver.0.clone();
     let shared_load_area = shared_load_area.0.clone();
-    thread_pool
-        .spawn(async move {
+    std::thread::Builder::new()
+        .name("mesh-worker".into())
+        .spawn(move || {
             // Busy wait until the texture map is loaded (ugly but only costly on startup)
             while texture_map.is_empty() {
                 yield_now()
@@ -91,7 +90,7 @@ pub fn setup_mesh_thread(
                 }
             }
         })
-        .detach();
+        .expect("mesh worker thread spawn");
 }
 
 #[derive(Resource)]

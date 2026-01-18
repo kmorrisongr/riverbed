@@ -5,7 +5,6 @@ use crate::{
     world::voxel_world::VoxelWorld,
 };
 use bevy::prelude::*;
-use bevy::tasks::AsyncComputeTaskPool;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use shared::{
     logging::logging::LogData,
@@ -28,14 +27,14 @@ pub fn setup_load_thread(
     commands.insert_resource(PlayerColumnUpdateSender(player_pos_sender));
     let (unload_sender, unload_recv) = unbounded::<ColPos>();
     commands.insert_resource(ColUnloadsReciever(unload_recv));
-    let thread_pool = AsyncComputeTaskPool::get();
     let load_world = world.clone();
     let render_distance = world.render_distance;
     let seed_value = world_rng.seed;
     let log_sender = log_sender.clone();
 
-    thread_pool
-        .spawn(async move {
+    std::thread::Builder::new()
+        .name("terrain-worker".into())
+        .spawn(move || {
             let terrain_gen = TerrainGenerator::new(seed_value as u32);
             // local copy of players positions
             let mut players_pos = HashMap::new();
@@ -120,7 +119,7 @@ pub fn setup_load_thread(
                 load_world.mark_change_col(col);
             }
         })
-        .detach();
+        .expect("terrain worker thread spawn");
 }
 
 pub fn assign_player_col(
