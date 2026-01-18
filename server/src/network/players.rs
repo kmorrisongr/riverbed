@@ -19,13 +19,16 @@ pub use shared::DEFAULT_SPAWN_POSITION;
 // - update_stepped_block_system::<NetworkPlayer, VoxelWorld>
 // =============================================================================
 
-/// The position the client predicted when sending its input.
+/// The position the client predicted when sending its input (for diagnostics).
 ///
 /// The client runs local physics prediction for responsive gameplay. When sending
 /// inputs to the server, it includes its predicted position. The server stores this
-/// for diagnostic purposes (comparing client prediction vs server authority).
+/// to compare client prediction vs server authority (useful for debugging desync).
+///
+/// Note: This is NOT used for server simulation - the server computes position
+/// authoritatively. It's stored purely for diagnostic/debugging purposes.
 #[derive(Component, Debug, Clone, Default)]
-pub struct ClientPredictedPosition(pub Vec3);
+pub struct ClientReportedPredictedPosition(pub Vec3);
 
 #[derive(Debug, Clone)]
 pub struct ServerPlayer {
@@ -105,7 +108,7 @@ pub fn handle_player_inputs_system(
         &NetworkPlayer,
         &mut LinearVelocity,
         &mut MovementMode,
-        &mut ClientPredictedPosition,
+        &mut ClientReportedPredictedPosition,
         &OnGround,
     )>,
 ) {
@@ -123,7 +126,7 @@ pub fn handle_player_inputs_system(
             continue;
         }
 
-        let Some((_, mut linear_velocity, mut movement_mode, mut predicted_pos, on_ground)) =
+        let Some((_, mut linear_velocity, mut movement_mode, mut client_predicted_pos, on_ground)) =
             player_query
                 .iter_mut()
                 .find(|(np, _, _, _, _)| np.client_id == ev.client_id)
@@ -135,7 +138,7 @@ pub fn handle_player_inputs_system(
             continue;
         };
 
-        predicted_pos.0 = ev.input.predicted_position;
+        client_predicted_pos.0 = ev.input.predicted_position;
 
         // Drop stale/duplicate inputs based on last processed timestamp.
         if ev.input.time_ms <= player.last_input_processed {

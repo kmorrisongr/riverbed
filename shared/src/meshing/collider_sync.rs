@@ -13,24 +13,24 @@ use crate::world::pos::pos2d::chunks_in_col;
 use crate::world::pos::pos3d::ChunkPos;
 use crate::world::ColUnloadEvent;
 
-use super::chunk_collider::ChunkColliderBundle;
+use super::chunk_collider::StaticChunkColliderBundle;
 
-/// Event requesting that a chunk's physics collider be generated or regenerated.
+/// Event requesting that a chunk's static physics collider be (re)generated.
 ///
 /// Sent when:
 /// - A new chunk is loaded and needs an initial collider
 /// - An existing chunk's blocks changed and the collider needs rebuilding
 #[derive(Message, Debug, Clone, Copy)]
-pub struct RebuildChunkColliderRequest {
+pub struct ChunkColliderRebuildRequest {
     pub chunk_pos: ChunkPos,
 }
 
-/// Maps chunk positions to their physics collider entities.
+/// Registry mapping chunk positions to their static physics collider entities.
 ///
 /// This resource tracks which Entity is the physics collider for each chunk,
 /// allowing efficient lookup when colliders need to be updated or removed.
 #[derive(Resource, Default)]
-pub struct ChunkColliderEntityMap {
+pub struct ChunkColliderEntityRegistry {
     pub entities: HashMap<ChunkPos, Entity>,
 }
 
@@ -40,12 +40,12 @@ pub trait ChunkProvider: Send + Sync + 'static {
     fn get_chunk(&self, pos: ChunkPos) -> Option<Chunk>;
 }
 
-/// System that spawns or updates chunk collider entities when chunks change.
+/// System that spawns or updates static chunk collider entities when chunks change.
 pub fn handle_chunk_collider_rebuild_requests<P: ChunkProvider + Resource>(
     mut commands: Commands,
-    mut events: MessageReader<RebuildChunkColliderRequest>,
+    mut events: MessageReader<ChunkColliderRebuildRequest>,
     chunk_provider: Option<Res<P>>,
-    mut collider_entities: ResMut<ChunkColliderEntityMap>,
+    mut collider_entities: ResMut<ChunkColliderEntityRegistry>,
 ) {
     let Some(chunk_provider) = chunk_provider else {
         return;
@@ -64,8 +64,8 @@ pub fn handle_chunk_collider_rebuild_requests<P: ChunkProvider + Resource>(
             continue;
         };
 
-        // Create new collider bundle
-        if let Some(bundle) = ChunkColliderBundle::new(&chunk, chunk_pos) {
+        // Create new collider bundle (will be None if chunk is all air)
+        if let Some(bundle) = StaticChunkColliderBundle::new(&chunk, chunk_pos) {
             let entity = commands.spawn(bundle).id();
             collider_entities.entities.insert(chunk_pos, entity);
         }
@@ -78,7 +78,7 @@ pub fn handle_chunk_collider_rebuild_requests<P: ChunkProvider + Resource>(
 pub fn despawn_colliders_for_unloaded_columns(
     mut commands: Commands,
     mut events: MessageReader<ColUnloadEvent>,
-    mut collider_entities: ResMut<ChunkColliderEntityMap>,
+    mut collider_entities: ResMut<ChunkColliderEntityRegistry>,
 ) {
     for event in events.read() {
         for chunk_pos in chunks_in_col(&event.0) {
@@ -108,8 +108,8 @@ impl<P: ChunkProvider + Resource> Default for ChunkColliderPlugin<P> {
 
 impl<P: ChunkProvider + Resource> Plugin for ChunkColliderPlugin<P> {
     fn build(&self, app: &mut App) {
-        app.init_resource::<ChunkColliderEntityMap>()
-            .add_message::<RebuildChunkColliderRequest>()
+        app.init_resource::<ChunkColliderEntityRegistry>()
+            .add_message::<ChunkColliderRebuildRequest>()
             .add_systems(Update, handle_chunk_collider_rebuild_requests::<P>)
             .add_systems(Update, despawn_colliders_for_unloaded_columns);
     }

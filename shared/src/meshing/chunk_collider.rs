@@ -19,30 +19,31 @@ use crate::world::chunk::Chunk;
 use crate::world::pos::pos3d::ChunkPos;
 use crate::world::CHUNK_S1;
 
-/// Marker component that identifies an entity as a chunk's physics collider.
+/// Tag component that identifies an entity as a chunk's static physics collider.
 ///
 /// This allows querying for chunk collider entities and determining which
 /// chunk a collider belongs to via the `chunk_pos` field.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ChunkColliderMarker {
+pub struct StaticChunkColliderTag {
     pub chunk_pos: ChunkPos,
 }
 
-/// Bundle for spawning a chunk collider entity.
+/// Bundle for spawning a chunk's static physics collider entity.
 ///
-/// Contains all components needed for a static physics collider representing
-/// a chunk's solid geometry.
+/// Contains all components needed for a static (RigidBody::Static) physics
+/// collider representing a chunk's solid geometry. The collider is a trimesh
+/// generated from the chunk's greedy-meshed surface.
 #[derive(Bundle)]
-pub struct ChunkColliderBundle {
-    pub marker: ChunkColliderMarker,
+pub struct StaticChunkColliderBundle {
+    pub tag: StaticChunkColliderTag,
     pub collider: Collider,
     pub rigid_body: RigidBody,
     pub position: Position,
     pub rotation: Rotation,
 }
 
-impl ChunkColliderBundle {
-    /// Create a new chunk collider bundle from a chunk.
+impl StaticChunkColliderBundle {
+    /// Create a new static chunk collider bundle from a chunk.
     ///
     /// Returns `None` if the chunk has no solid geometry (all air).
     pub fn new(chunk: &Chunk, chunk_pos: ChunkPos) -> Option<Self> {
@@ -56,7 +57,7 @@ impl ChunkColliderBundle {
         );
 
         Some(Self {
-            marker: ChunkColliderMarker { chunk_pos },
+            tag: StaticChunkColliderTag { chunk_pos },
             collider,
             rigid_body: RigidBody::Static,
             position: Position(world_pos),
@@ -222,7 +223,7 @@ mod tests {
             realm: Realm::Overworld,
         };
 
-        let bundle = ChunkColliderBundle::new(&chunk, chunk_pos);
+        let bundle = StaticChunkColliderBundle::new(&chunk, chunk_pos);
         assert!(bundle.is_some());
     }
 }

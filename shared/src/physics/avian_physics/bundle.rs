@@ -6,16 +6,16 @@ use bevy::prelude::*;
 use super::{MovementMode, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS};
 use crate::physics::ground_detection::{OnGround, SteppingOn};
 
-/// Avian3d player physics bundle with dynamic rigid body.
+/// Physics bundle for dynamic player entities using avian3d.
 ///
 /// This bundle contains all components needed for physics simulation:
-/// - Avian3d components (RigidBody, Collider, velocities, etc.)
+/// - Avian3d components (RigidBody::Dynamic, Collider, velocities, etc.)
 /// - Movement state tracking (MovementMode, OnGround, SteppingOn)
 ///
 /// Both client and server use this bundle when spawning player entities,
-/// ensuring consistent physics behavior.
+/// ensuring consistent physics behavior across the network.
 #[derive(Bundle)]
-pub struct PlayerPhysicsBundle {
+pub struct DynamicPlayerPhysicsBundle {
     // Avian3d physics components
     pub rigid_body: RigidBody,
     pub collider: Collider,
@@ -32,8 +32,8 @@ pub struct PlayerPhysicsBundle {
     pub stepping_on: SteppingOn,
 }
 
-impl PlayerPhysicsBundle {
-    /// Create a new player physics bundle using a capsule collider.
+impl DynamicPlayerPhysicsBundle {
+    /// Create a new dynamic player physics bundle with a capsule collider.
     pub fn new() -> Self {
         Self {
             rigid_body: RigidBody::Dynamic,
@@ -58,7 +58,7 @@ impl PlayerPhysicsBundle {
     }
 }
 
-impl Default for PlayerPhysicsBundle {
+impl Default for DynamicPlayerPhysicsBundle {
     fn default() -> Self {
         Self::new()
     }

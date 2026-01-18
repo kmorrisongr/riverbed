@@ -17,9 +17,17 @@ use crate::world::ClientWorldMap;
 
 use super::PlayerControlled;
 
-pub struct ClientMovementPredictionPlugin;
+/// Plugin that handles client-side movement prediction using avian3d physics.
+///
+/// This plugin implements the client half of the server-authoritative model:
+/// - Captures player inputs and applies them locally for responsive gameplay
+/// - Uses the same velocity computation as the server (via shared code)
+/// - Avian3d handles collision resolution against chunk colliders
+///
+/// The server remains authoritative; see `network::reconciliation` for correction handling.
+pub struct ClientSideMovementPredictionPlugin;
 
-impl Plugin for ClientMovementPredictionPlugin {
+impl Plugin for ClientSideMovementPredictionPlugin {
     fn build(&self, app: &mut App) {
         // Use shared systems for ground state updates, parameterized by PlayerControlled marker
         app.add_systems(
@@ -30,7 +38,7 @@ impl Plugin for ClientMovementPredictionPlugin {
             Update,
             (
                 update_ground_state_system::<PlayerControlled>,
-                apply_movement_input,
+                apply_predicted_movement_input,
             )
                 .chain(),
         );
@@ -43,12 +51,12 @@ pub struct Crouching(pub bool);
 // Re-export shared physics components for other client modules
 pub use shared::physics::SteppingOn;
 
-/// Applies movement input to compute desired velocity.
+/// Applies movement input to compute predicted velocity for the local player.
 ///
-/// This system uses the same `compute_movement_step_from_actions` function that the server uses,
+/// This system uses the same `apply_movement_step_to_components` function that the server uses,
 /// ensuring that client-side prediction produces identical velocity calculations.
 /// Avian3d will then integrate the velocity and resolve collisions.
-fn apply_movement_input(
+fn apply_predicted_movement_input(
     time: Res<Time>,
     frame_inputs: Res<CurrentFrameInputs>,
     camera_query: Query<&Transform, With<FpsCam>>,

@@ -9,7 +9,7 @@ mod world;
 pub use cleanup::*;
 pub use extensions::SendGameMessageExtension;
 pub use inputs::*;
-pub use reconciliation::ReconciliationPlugin;
+pub use reconciliation::ServerAuthorityReconciliationPlugin;
 pub use setup::*;
 
 use bevy::prelude::*;
@@ -25,8 +25,8 @@ use shared::net::input_history::InputHistory;
 pub struct NetworkPlugin;
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
-        // Add reconciliation plugin for server-authoritative sync
-        app.add_plugins(ReconciliationPlugin);
+        // Add reconciliation plugin for correcting client prediction with server authority
+        app.add_plugins(ServerAuthorityReconciliationPlugin);
 
         // Initialize resources
         app.init_resource::<CurrentPlayerProfile>()

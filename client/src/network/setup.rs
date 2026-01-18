@@ -177,7 +177,7 @@ pub fn poll_network_messages(
     mut ev_item_stacks_update: MessageWriter<ServerToClientItemStackUpdate>,
     mut ev_player_update: MessageWriter<ServerToClientPlayerUpdate>,
     mut ev_log_events: MessageWriter<LogEvent>,
-    mut ev_collider_rebuild: MessageWriter<shared::meshing::RebuildChunkColliderRequest>,
+    mut ev_collider_rebuild: MessageWriter<shared::meshing::ChunkColliderRebuildRequest>,
 ) {
     update_world_from_network(
         &mut client,

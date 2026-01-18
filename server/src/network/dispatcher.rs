@@ -1,7 +1,7 @@
 use crate::network::block_interactions::{handle_block_interactions, BlockInteractionEvent};
 use crate::network::broadcast_world::{ChunkBroadcastPlugin, ChunkDeliveryTracker, ServerTick};
 use crate::network::players::{
-    broadcast_player_updates_system, handle_player_inputs_system, ClientPredictedPosition,
+    broadcast_player_updates_system, handle_player_inputs_system, ClientReportedPredictedPosition,
     PlayerInputsEvent, PlayerRegistry,
 };
 use crate::world::voxel_world::VoxelWorld;
@@ -14,7 +14,7 @@ use shared::messages::{
 };
 use shared::net::clock;
 use shared::physics::{
-    update_ground_state_system, update_stepped_block_system, MovementMode, PlayerPhysicsBundle,
+    update_ground_state_system, update_stepped_block_system, DynamicPlayerPhysicsBundle, MovementMode,
 };
 use shared::world::realm::Realm;
 use shared::world::WorldSeed;
@@ -220,8 +220,8 @@ fn handle_auth_requests(
             Transform::from_translation(spawn_position),
             Realm::Overworld,
             NetworkPlayer { client_id },
-            ClientPredictedPosition(spawn_position),
-            PlayerPhysicsBundle::new(),
+            ClientReportedPredictedPosition(spawn_position),
+            DynamicPlayerPhysicsBundle::new(),
         ));
         info!(
             "Spawned ECS entity for player {} at {:?}",

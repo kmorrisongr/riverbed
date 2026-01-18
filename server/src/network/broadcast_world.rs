@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_renet::renet::{ClientId, RenetServer};
 use crossbeam::channel::Receiver;
-use shared::meshing::RebuildChunkColliderRequest;
+use shared::meshing::ChunkColliderRebuildRequest;
 use shared::messages::{ServerToClientMessage, ServerToClientWorldUpdate};
 use shared::net::clock;
 use shared::world::chunk::Chunk;
@@ -11,7 +11,7 @@ use shared::world::realm::Realm;
 use std::collections::{HashMap, HashSet};
 
 use crate::network::dispatcher::NetworkPlayer;
-use crate::network::players::{ClientPredictedPosition, PlayerRegistry};
+use crate::network::players::{ClientReportedPredictedPosition, PlayerRegistry};
 use crate::world::voxel_world::VoxelWorld;
 
 use super::extensions::SendGameMessageExtension;
@@ -64,7 +64,7 @@ pub struct ChunkChangesReceiver(pub Receiver<ChunkPos>);
 pub fn process_chunk_changes(
     chunk_changes: Option<Res<ChunkChangesReceiver>>,
     mut tracker: ResMut<ChunkDeliveryTracker>,
-    mut collider_rebuild_requests: MessageWriter<RebuildChunkColliderRequest>,
+    mut collider_rebuild_requests: MessageWriter<ChunkColliderRebuildRequest>,
 ) {
     let Some(chunk_changes) = chunk_changes else {
         return;
@@ -73,7 +73,7 @@ pub fn process_chunk_changes(
     while let Ok(chunk_position) = chunk_changes.0.try_recv() {
         tracker.invalidate_chunk(&chunk_position);
         // Request the collider system to rebuild this chunk's collider
-        collider_rebuild_requests.write(RebuildChunkColliderRequest {
+        collider_rebuild_requests.write(ChunkColliderRebuildRequest {
             chunk_pos: chunk_position,
         });
     }
@@ -85,7 +85,7 @@ pub fn broadcast_world_state(
     world: Res<VoxelWorld>,
     mut tracker: ResMut<ChunkDeliveryTracker>,
     registry: Res<PlayerRegistry>,
-    player_query: Query<(&NetworkPlayer, &ClientPredictedPosition, &Realm)>,
+    player_query: Query<(&NetworkPlayer, &ClientReportedPredictedPosition, &Realm)>,
 ) {
     tick.0 += 1;
     let render_distance = world.render_distance as i32;

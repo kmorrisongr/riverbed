@@ -30,21 +30,25 @@ pub const POSITION_ERROR_HARD_SNAP_THRESHOLD_METERS: f32 = 2.0;
 /// Interpolation factor for smooth corrections (0.0 = no correction, 1.0 = instant snap).
 pub const CORRECTION_LERP_FACTOR: f32 = 0.3;
 
-/// Plugin for client-side reconciliation
-pub struct ReconciliationPlugin;
+/// Plugin for reconciling client-predicted state with server-authoritative updates.
+///
+/// This implements the correction side of client-side prediction: when the server
+/// sends authoritative position updates, this plugin smoothly corrects the client's
+/// local state to match.
+pub struct ServerAuthorityReconciliationPlugin;
 
-impl Plugin for ReconciliationPlugin {
+impl Plugin for ServerAuthorityReconciliationPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, reconcile_player_state);
+        app.add_systems(Update, reconcile_with_server_authority);
     }
 }
 
-/// System that reconciles the local player's state with server updates.
+/// System that reconciles the local player's predicted state with server authority.
 ///
 /// Since avian3d handles collision resolution, we can't replay inputs to predict
 /// position. Instead, we smoothly correct the client's position toward the
 /// server's authoritative position.
-pub fn reconcile_player_state(
+pub fn reconcile_with_server_authority(
     mut ev_update: MessageReader<ServerToClientPlayerUpdate>,
     mut player_query: Query<
         (&mut Transform, &mut LinearVelocity, &mut MovementMode),

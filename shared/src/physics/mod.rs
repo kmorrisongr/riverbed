@@ -1,24 +1,42 @@
 //! Shared physics simulation module using avian3d.
 //!
 //! This module provides physics types and velocity computation that can be used
-//! by both client and server. The architecture is:
+//! by both client and server. The architecture follows the migration guidance:
 //!
-//! - **Players**: `RigidBody::Dynamic` with capsule colliders
-//! - **Chunks**: `RigidBody::Static` with trimesh colliders (see `meshing::ChunkColliderPlugin`)
-//! - **Movement**: Custom kinematics (we compute velocity, avian3d resolves collisions)
+//! # Entity Types
 //!
-//! # Server-Authoritative Model
+//! - **Players** (`DynamicPlayerPhysicsBundle`): `RigidBody::Dynamic` entities with capsule
+//!   colliders. Avian3d handles collision resolution; we compute desired velocity.
+//! - **Chunks** (`StaticChunkColliderBundle` via `meshing::ChunkColliderPlugin`):
+//!   `RigidBody::Static` entities with trimesh colliders generated from greedy-meshed surfaces.
 //!
-//! The server is the single source of truth for player state:
-//! 1. Client captures inputs and sends to server
-//! 2. Client predicts movement locally using `apply_movement_step_to_components()`
-//! 3. Server processes inputs using the same function for identical velocity calculation
-//! 4. Server broadcasts authoritative position updates
-//! 5. Client reconciles prediction with server state (see `client::network::reconciliation`)
+//! # Movement Philosophy: Custom Kinematics + Physics Engine Collision
 //!
-//! # Key Functions
+//! We use a hybrid approach:
+//! - **Velocity computation**: Custom code computes desired velocity from inputs
+//! - **Collision resolution**: Avian3d integrates velocity and resolves collisions
 //!
-//! - [`apply_movement_step_to_components`]: Applies input to ECS components (used by both client & server)
+//! This gives us responsive, game-feel-tunable movement while leveraging avian3d's
+//! robust collision detection against chunk geometry.
+//!
+//! # Server-Authoritative Networking Model
+//!
+//! The server is the single source of truth (SSOT) for player positions:
+//!
+//! 1. **Client** captures inputs and predicts movement locally for responsiveness
+//! 2. **Client** sends inputs to server (with predicted position for diagnostics)
+//! 3. **Server** processes inputs using identical velocity computation
+//! 4. **Server** broadcasts authoritative position updates
+//! 5. **Client** reconciles prediction with server state (see `ServerAuthorityReconciliationPlugin`)
+//!
+//! Both client and server use `apply_movement_step_to_components()` ensuring identical
+//! velocity calculations (though collision resolution may differ due to timing).
+//!
+//! # Key Types and Functions
+//!
+//! - [`DynamicPlayerPhysicsBundle`]: Bundle for spawning player entities with all physics components
+//! - [`SharedPhysicsWorldPlugin`]: Plugin that configures avian3d (gravity, collision detection)
+//! - [`apply_movement_step_to_components`]: Applies input to ECS components (client & server)
 //! - [`compute_desired_velocity`]: Pure function for velocity calculation
 //! - [`update_ground_state_system`]: Generic system for ground detection via avian3d contacts
 //! - [`update_stepped_block_system`]: Generic system for detecting which block player stands on
@@ -35,8 +53,8 @@ pub use avian3d::prelude::{
 // Re-export core physics types and functions from the avian integration
 pub use avian_physics::{
     actions_to_camera_relative_input, apply_movement_step_to_components, compute_desired_velocity,
-    compute_movement_step_from_actions, AvianSharedPhysicsPlugin, MovementInput, MovementMode,
-    MovementStepResult, PlayerPhysicsBundle, AIR_FRICTION, GROUND_ACCELERATION, GROUND_FRICTION,
+    compute_movement_step_from_actions, DynamicPlayerPhysicsBundle, MovementInput, MovementMode,
+    MovementStepResult, SharedPhysicsWorldPlugin, AIR_FRICTION, GROUND_ACCELERATION, GROUND_FRICTION,
     PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS, PLAYER_GRAVITY, PLAYER_JUMP_FORCE,
     PLAYER_QUERY_BOUNDS,
 };

@@ -1,7 +1,7 @@
 use crate::sounds::{on_item_get, BlockSoundCD, FootstepCD};
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
-use shared::physics::PlayerPhysicsBundle;
+use shared::physics::DynamicPlayerPhysicsBundle;
 use shared::world::pos::pos2d::ColPos;
 use shared::world::pos::PlayerCol;
 use shared::{
@@ -60,7 +60,7 @@ pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
             },
             Visibility::default(),
             realm,
-            PlayerPhysicsBundle::new(),
+            DynamicPlayerPhysicsBundle::new(),
             TargetBlock(None),
             ItemHolder::Inventory(inventory),
             PlayerControlled,
