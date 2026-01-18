@@ -78,7 +78,7 @@ impl ClientChunk {
                 };
 
                 if quad.neighbor_block == Block::SeaBlock {
-                    let dist_to_surface = (WATER_H as usize - cy - quad.y as usize) as f32;
+                    let dist_to_surface = (WATER_H as usize - cy - quad.y() as usize) as f32;
                     r *= (-dist_to_surface * 0.05).exp();
                     g *= (-dist_to_surface * 0.045).exp();
                     b *= (-dist_to_surface * 0.04).exp();

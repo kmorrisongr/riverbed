@@ -15,26 +15,45 @@ use crate::world::utils::Palette;
 use crate::world::{CHUNKP_S3, CHUNK_S1};
 
 /// Data for a single quad extracted from greedy meshing.
+///
+/// Layout optimized for cache efficiency (16 bytes total):
+/// - Packs position into u32 (xyz uses only 18 bits)
+/// - Uses u8 for width/height (max 62)
+/// - Block types last for alignment
 #[derive(Debug, Clone, Copy)]
+#[repr(C)]
 pub struct QuadData {
-    /// The packed xyz position of the quad
-    pub xyz: u64,
-    /// X coordinate
-    pub x: u8,
-    /// Y coordinate
-    pub y: u8,
-    /// Z coordinate
-    pub z: u8,
-    /// Width of the quad
+    /// Packed xyz position: 6 bits each for x, y, z (18 bits used of 32)
+    /// Also encodes width/height in upper bits from bgm format
+    pub xyz: u32,
+    /// Width of the quad (1-62)
     pub width: u8,
-    /// Height of the quad
+    /// Height of the quad (1-62)
     pub height: u8,
-    /// Index into the palette for the voxel
-    pub voxel_index: usize,
     /// The block type
     pub block: Block,
     /// The neighbor block (block in front of this face)
     pub neighbor_block: Block,
+}
+
+impl QuadData {
+    /// Extract X coordinate (0-63)
+    #[inline]
+    pub fn x(&self) -> u8 {
+        (self.xyz & 0x3F) as u8
+    }
+
+    /// Extract Y coordinate (0-63)
+    #[inline]
+    pub fn y(&self) -> u8 {
+        ((self.xyz >> 6) & 0x3F) as u8
+    }
+
+    /// Extract Z coordinate (0-63)
+    #[inline]
+    pub fn z(&self) -> u8 {
+        ((self.xyz >> 12) & 0x3F) as u8
+    }
 }
 
 /// Quads extracted from a chunk, organized by face direction.
@@ -115,13 +134,9 @@ pub fn extract_quads(chunk: &Chunk, lod: usize) -> ChunkQuads {
             )] as usize];
 
             faces[face_n].push(QuadData {
-                xyz: quad.0 & MASK_XYZ,
-                x: x as u8,
-                y: y as u8,
-                z: z as u8,
+                xyz: (quad.0 & MASK_XYZ) as u32,
                 width: quad.width() as u8,
                 height: quad.height() as u8,
-                voxel_index: voxel_i,
                 block,
                 neighbor_block,
             });

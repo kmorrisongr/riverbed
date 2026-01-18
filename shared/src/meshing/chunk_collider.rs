@@ -99,9 +99,9 @@ fn quads_to_trimesh(quads: &ChunkQuads) -> (Vec<Vec3>, Vec<[u32; 3]>) {
             // Get the 4 corners of the quad in world space
             let quad_vertices = face_quad_vertices(
                 face,
-                quad.x as f32,
-                quad.y as f32,
-                quad.z as f32,
+                quad.x() as f32,
+                quad.y() as f32,
+                quad.z() as f32,
                 quad.width as f32,
                 quad.height as f32,
             );
