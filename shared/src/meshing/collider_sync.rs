@@ -74,33 +74,38 @@ pub trait ChunkProvider: Send + Sync + 'static {
 /// Maximum number of new collider cook tasks to start per frame.
 const MAX_NEW_COOK_TASKS_PER_TICK: usize = 8;
 /// Capacity for the collider worker's input queue.
-const COLLIDER_QUEUE_CAPACITY: usize = 64;
+const COLLIDER_QUEUE_CAPACITY: usize = 128;
+/// Number of threads dedicated to collider cooking.
+const COLLIDER_WORKER_THREADS: usize = 2;
 
 fn setup_collider_worker(mut commands: Commands) {
     let (job_sender, job_receiver) = bounded::<ChunkColliderJob>(COLLIDER_QUEUE_CAPACITY);
     let (result_sender, result_receiver) = unbounded::<ChunkColliderResult>();
 
-    // Dedicated worker to cook colliders without competing for the global async pool.
-    Builder::new()
-        .name("collider-worker".into())
-        .spawn(move || {
-            while let Ok(job) = job_receiver.recv() {
-                let bundle = generate_chunk_trimesh_collider(&job.chunk)
-                    .map(|collider| StaticChunkColliderBundle::from_collider(collider, job.chunk_pos));
+    for i in 0..COLLIDER_WORKER_THREADS {
+        let job_receiver = job_receiver.clone();
+        let result_sender = result_sender.clone();
+        Builder::new()
+            .name(format!("collider-worker-{i}"))
+            .spawn(move || {
+                while let Ok(job) = job_receiver.recv() {
+                    let bundle = generate_chunk_trimesh_collider(&job.chunk).map(|collider| {
+                        StaticChunkColliderBundle::from_collider(collider, job.chunk_pos)
+                    });
 
-                if result_sender
-                    .send(ChunkColliderResult {
-                        chunk_pos: job.chunk_pos,
-                        bundle,
-                    })
-                    .is_err()
-                {
-                    // Main thread went away; exit the worker.
-                    break;
+                    if result_sender
+                        .send(ChunkColliderResult {
+                            chunk_pos: job.chunk_pos,
+                            bundle,
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
                 }
-            }
-        })
-        .expect("collider worker thread spawn");
+            })
+            .expect("collider worker thread spawn");
+    }
 
     commands.insert_resource(ChunkColliderJobSender(job_sender));
     commands.insert_resource(ChunkColliderResultReceiver(result_receiver));
