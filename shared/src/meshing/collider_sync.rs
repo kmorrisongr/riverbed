@@ -187,8 +187,14 @@ impl<P: ChunkProvider + Resource> Plugin for ChunkColliderPlugin<P> {
             .init_resource::<ChunkColliderPending>()
             .init_resource::<ChunkColliderCookTasks>()
             .add_message::<ChunkColliderRebuildRequest>()
-            .add_systems(Update, queue_collider_cook_tasks::<P>)
-            .add_systems(Update, apply_finished_collider_cooks)
-            .add_systems(Update, despawn_colliders_for_unloaded_columns);
+            .add_systems(
+                Update,
+                (
+                    queue_collider_cook_tasks::<P>,
+                    despawn_colliders_for_unloaded_columns,
+                    apply_finished_collider_cooks,
+                )
+                    .chain(),
+            );
     }
 }

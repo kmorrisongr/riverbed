@@ -17,7 +17,7 @@ use shared::{
             pos3d::{BlockPos, ChunkPos},
             PlayerCol,
         },
-        BlockAccess, MAX_HEIGHT, Y_CHUNKS,
+        ColumnUnloader, BlockAccess, MAX_HEIGHT, Y_CHUNKS, unload_column,
     },
 };
 use std::sync::Arc;
@@ -108,6 +108,12 @@ impl ClientWorldMap {
     }
 }
 
+impl ColumnUnloader for ClientWorldMap {
+    fn unload_column_impl(&self, col: ColPos) {
+        self.unload_col(col);
+    }
+}
+
 impl BlockAccess for ClientWorldMap {
     fn get_block_safe(&self, pos: BlockPos) -> Block {
         if pos.y < 0 || pos.y >= MAX_HEIGHT as i32 {
@@ -195,8 +201,7 @@ fn unload_distant_columns(
 
         // Also check realm - unload columns from different realms
         if col.realm != player_pos.realm || dx > distance || dz > distance {
-            world_map.unload_col(col);
-            unload_events.write(ColUnloadEvent(col));
+            unload_column(&*world_map, col, &mut unload_events);
         }
     }
 }

@@ -36,6 +36,23 @@ pub struct WorldSeed(pub u32);
 #[derive(Message, Debug, Clone, Copy)]
 pub struct ColUnloadEvent(pub ColPos);
 
+/// Trait for types that can unload a column of chunks.
+/// Implementers provide the actual unload logic; the helper `unload_column`
+/// will emit the unload event and then call this implementation.
+pub trait ColumnUnloader {
+    fn unload_column_impl(&self, col: ColPos);
+}
+
+/// Emit a `ColUnloadEvent` and run the implementer's unload logic.
+pub fn unload_column<U: ColumnUnloader>(
+    unloader: &U,
+    col: ColPos,
+    writer: &mut MessageWriter<ColUnloadEvent>,
+) {
+    writer.write(ColUnloadEvent(col));
+    unloader.unload_column_impl(col);
+}
+
 pub struct BlockRayCastHit {
     pub pos: BlockPos,
     pub normal: Vec3,

@@ -11,7 +11,7 @@ use shared::{
             pos2d::{chunks_in_col, BlockPos2d, ColPos, ColedPos},
             pos3d::{BlockPos, ChunkPos, ChunkedPos},
         },
-        BlockAccess, CHUNKP_S1, CHUNK_S1, MAX_HEIGHT, Y_CHUNKS,
+        BlockAccess, ColumnUnloader, CHUNKP_S1, CHUNK_S1, MAX_HEIGHT, Y_CHUNKS,
     },
 };
 use std::sync::Arc;
@@ -252,6 +252,12 @@ impl VoxelWorld {
                     .expect("Failed to send chunk change");
             }
         }
+    }
+}
+
+impl ColumnUnloader for VoxelWorld {
+    fn unload_column_impl(&self, col: ColPos) {
+        self.unload_col(col);
     }
 }
 
