@@ -7,6 +7,7 @@ use crate::world::{
     terrain_thread::{assign_player_col, on_unload_col, send_player_pos_update, setup_load_thread},
 };
 use bevy::prelude::*;
+use shared::meshing::ColColliderUnload;
 use shared::world::{
     block_entities::BlockEntities,
     pos::{pos2d::ColPos, pos3d::ChunkPos},
@@ -35,6 +36,17 @@ impl Plugin for TerrainLoadPlugin {
                 (assign_player_col, send_player_pos_update).in_set(PlayerPositionTracking),
             )
             .add_systems(Update, on_unload_col)
-            .add_systems(Update, unload_block_entities);
+            .add_systems(Update, unload_block_entities)
+            .add_systems(Update, bridge_col_unload_to_colliders);
+    }
+}
+
+/// Bridge ColUnloadEvent to ColColliderUnload for the collider system.
+fn bridge_col_unload_to_colliders(
+    mut col_unload: MessageReader<ColUnloadEvent>,
+    mut collider_unload: MessageWriter<ColColliderUnload>,
+) {
+    for event in col_unload.read() {
+        collider_unload.write(ColColliderUnload { col_pos: event.0 });
     }
 }

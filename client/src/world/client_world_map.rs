@@ -122,6 +122,12 @@ impl BlockAccess for ClientWorldMap {
     }
 }
 
+impl shared::meshing::ChunkProvider for ClientWorldMap {
+    fn get_chunk(&self, pos: ChunkPos) -> Option<shared::world::chunk::Chunk> {
+        self.chunks.get(&pos).map(|c| c.value().read().inner().clone())
+    }
+}
+
 /// Event sent when requesting to set a block.
 /// This will be picked up by the network system and sent to the server.
 #[derive(Message, Debug, Clone)]
@@ -152,8 +158,21 @@ impl Plugin for ClientWorldPlugin {
             .add_message::<SetBlockRequest>()
             .add_message::<BlockChanged>()
             .add_message::<ColUnloadEvent>()
+            // Add chunk collider plugin for physics
+            .add_plugins(shared::meshing::ChunkColliderPlugin::<ClientWorldMap>::new())
             .add_systems(Update, process_block_requests)
-            .add_systems(Update, unload_distant_columns);
+            .add_systems(Update, unload_distant_columns)
+            .add_systems(Update, bridge_col_unload_to_colliders);
+    }
+}
+
+/// Bridge ColUnloadEvent to ColColliderUnload for the collider system.
+fn bridge_col_unload_to_colliders(
+    mut col_unload: MessageReader<ColUnloadEvent>,
+    mut collider_unload: MessageWriter<shared::meshing::ColColliderUnload>,
+) {
+    for event in col_unload.read() {
+        collider_unload.write(shared::meshing::ColColliderUnload { col_pos: event.0 });
     }
 }
 

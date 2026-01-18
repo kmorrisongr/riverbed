@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_renet::renet::RenetClient;
 use shared::logging::logging::LogEvent;
+use shared::meshing::ChunkColliderUpdate;
 use shared::messages::{
     ServerToClientItemStackUpdate, ServerToClientMessage, ServerToClientPlayerSpawn,
     ServerToClientPlayerUpdate,
@@ -21,6 +22,7 @@ pub fn update_world_from_network(
     ev_item_stacks_update: &mut MessageWriter<ServerToClientItemStackUpdate>,
     ev_player_update: &mut MessageWriter<ServerToClientPlayerUpdate>,
     ev_log_events: &mut MessageWriter<LogEvent>,
+    ev_collider_update: &mut MessageWriter<ChunkColliderUpdate>,
 ) {
     while let Some(Ok(message)) = client.receive_game_message_except_channel(STC_AUTH_CHANNEL) {
         match message {
@@ -36,6 +38,9 @@ pub fn update_world_from_network(
                             if mesh_sender.0.send(chunk_position).is_err() {
                                 warn!("Failed to send mesh order for chunk {:?}", chunk_position);
                             }
+                            
+                            // Notify the collider system to generate a collider for this chunk
+                            ev_collider_update.write(ChunkColliderUpdate { chunk_pos: chunk_position });
                         }
 
                         debug!("Received and processed {} chunks from server", chunk_count);
