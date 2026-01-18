@@ -14,7 +14,7 @@ use shared::messages::{
     ServerToClientMessage, ServerToClientPlayerSpawn,
 };
 use shared::net::clock;
-use shared::physics::{MovementMode, PlayerPhysicsBundle};
+use shared::physics::{MovementMode, OnGround, PlayerPhysicsBundle};
 use shared::world::realm::Realm;
 use shared::world::WorldSeed;
 use shared::GameServerConfig;
@@ -221,6 +221,7 @@ fn handle_auth_requests(
             ServerPhysicsState::default(),
             ClientReportedPredictedPosition(spawn_position),
             PlayerPhysicsBundle::new(),
+            OnGround::default(),
         ));
         info!(
             "Spawned ECS entity for player {} at {:?}",

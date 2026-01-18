@@ -6,7 +6,7 @@ use shared::messages::{
 };
 use shared::physics::{
     is_on_ground_from_contacts, player_step::apply_player_input_step, LinearVelocity, MovementMode,
-    PhysicsState,
+    OnGround, PhysicsState,
 };
 use shared::world::realm::Realm;
 use std::collections::HashMap;
@@ -17,11 +17,12 @@ use super::extensions::SendGameMessageExtension;
 // Re-export from shared for backward compatibility
 pub use shared::DEFAULT_SPAWN_POSITION;
 
+/// Server-side physics state tracking for networked players.
+/// Note: Ground detection uses the shared `OnGround` component.
 #[derive(Component, Debug, Clone)]
 pub struct ServerPhysicsState {
     pub velocity: Vec3,
     pub movement_mode: MovementMode,
-    pub on_ground: bool,
 }
 
 impl Default for ServerPhysicsState {
@@ -29,21 +30,20 @@ impl Default for ServerPhysicsState {
         Self {
             velocity: Vec3::ZERO,
             movement_mode: MovementMode::Walking,
-            on_ground: false,
         }
     }
 }
 
-/// Updates ServerPhysicsState.on_ground from avian3d collision contacts.
+/// Updates OnGround component from avian3d collision contacts for server players.
 ///
 /// This should run after avian3d's collision detection but before
 /// input handling that depends on ground state.
 pub fn update_server_ground_state(
     collisions: Collisions,
-    mut query: Query<(Entity, &mut ServerPhysicsState), With<NetworkPlayer>>,
+    mut query: Query<(Entity, &mut OnGround), With<NetworkPlayer>>,
 ) {
-    for (entity, mut physics_state) in query.iter_mut() {
-        physics_state.on_ground = is_on_ground_from_contacts(&collisions, entity);
+    for (entity, mut on_ground) in query.iter_mut() {
+        on_ground.0 = is_on_ground_from_contacts(&collisions, entity);
     }
 }
 
@@ -128,6 +128,7 @@ pub fn handle_player_inputs_system(
         &mut ServerPhysicsState,
         &mut ClientReportedPredictedPosition,
         &Realm,
+        &OnGround,
     )>,
 ) {
     for ev in events.read() {
@@ -144,9 +145,9 @@ pub fn handle_player_inputs_system(
             continue;
         }
 
-        let Some((_, transform, mut linear_velocity, mut physics_state, mut predicted_pos, realm)) = player_query
+        let Some((_, transform, mut linear_velocity, mut physics_state, mut predicted_pos, realm, on_ground)) = player_query
             .iter_mut()
-            .find(|(np, _, _, _, _, _)| np.client_id == ev.client_id)
+            .find(|(np, _, _, _, _, _, _)| np.client_id == ev.client_id)
         else {
             warn!(
                 "No ECS entity found for authenticated player {}",
@@ -168,7 +169,7 @@ pub fn handle_player_inputs_system(
             Vec3::from(linear_velocity.0),
             physics_state.movement_mode,
             *realm,
-            physics_state.on_ground,
+            on_ground.0,
         );
 
         let step = apply_player_input_step(
@@ -181,7 +182,6 @@ pub fn handle_player_inputs_system(
         // Set velocity - avian3d will integrate and resolve collisions
         linear_velocity.0 = step.velocity.into();
         physics_state.velocity = step.velocity;
-        // Note: on_ground is updated by update_server_ground_state from avian3d contacts
         physics_state.movement_mode = step.movement_mode;
 
         player.last_input_processed = ev.input.time_ms;

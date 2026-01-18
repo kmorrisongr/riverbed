@@ -127,7 +127,11 @@ impl PhysicsState {
     }
 }
 
-/// Result of a physics simulation step
+/// Result of computing desired velocity for a single physics tick.
+/// 
+/// This is the low-level output from `compute_desired_velocity`. For the
+/// higher-level player input result (including movement mode changes),
+/// see `PlayerStepOutput` in the `player_step` module.
 #[derive(Debug, Clone)]
 pub struct PhysicsStepResult {
     pub new_velocity: Vec3,
@@ -184,7 +188,11 @@ impl Default for PlayerPhysicsBundle {
 }
 
 // =============================================================================
-// Block Query Functions (for gameplay, not collision)
+// Block Query Functions (for gameplay logic, not physics collision)
+// =============================================================================
+// These functions query the voxel world directly for gameplay purposes like
+// footstep sounds and surface friction. For physics collision/ground detection,
+// use `is_on_ground_from_contacts` which queries avian3d's collision data.
 // =============================================================================
 
 /// Get block positions below the player for ground detection.
@@ -200,9 +208,15 @@ fn blocks_below(pos: Vec3, realm: Realm, aabb: Vec3) -> impl Iterator<Item = Blo
         .map(move |(x, z)| BlockPos { x, y, z, realm })
 }
 
-/// Check if the entity is standing on solid ground (for footstep sounds, etc.)
+/// Check if the entity is standing on a solid block (for gameplay effects).
 ///
-/// Note: This is for gameplay queries only. Avian3d handles actual collision.
+/// This queries the voxel world directly - use it for:
+/// - Footstep sound triggers
+/// - Surface-specific effects
+/// - Block interaction availability
+///
+/// **For physics ground detection** (jumping, gravity), use `OnGround` component
+/// which is updated from avian3d's collision contacts.
 pub fn check_on_ground<W: BlockAccess>(
     world: &W,
     position: Vec3,

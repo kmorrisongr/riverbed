@@ -52,19 +52,6 @@ pub fn is_on_ground_from_contacts(collisions: &Collisions, entity: Entity) -> bo
     false
 }
 
-/// System that updates `OnGround` component from avian3d collision contacts.
-///
-/// This should run after avian3d's collision detection but before
-/// movement systems that depend on ground state.
-pub fn update_on_ground_from_collisions(
-    collisions: Collisions,
-    mut query: Query<(Entity, &mut OnGround)>,
-) {
-    for (entity, mut on_ground) in query.iter_mut() {
-        on_ground.0 = is_on_ground_from_contacts(&collisions, entity);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
