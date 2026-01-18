@@ -21,9 +21,10 @@ use crate::physics::{
 pub struct PlayerStepOutput {
     /// The desired velocity (avian3d will apply this and resolve collisions)
     pub velocity: Vec3,
-    /// Whether the player was on ground (used for jump logic)
+    /// Whether the player was on ground this frame (passed through from input state,
+    /// used by callers for sound/visual effects - not modified by velocity computation)
     pub on_ground: bool,
-    /// The current movement mode
+    /// The current movement mode (may change if fly toggle was pressed)
     pub movement_mode: MovementMode,
 }
 
@@ -69,7 +70,7 @@ pub fn apply_player_input_step(
 
     PlayerStepOutput {
         velocity: result.new_velocity,
-        on_ground: result.on_ground,
+        on_ground: state.on_ground,
         movement_mode,
     }
 }

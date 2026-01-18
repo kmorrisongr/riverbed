@@ -17,7 +17,6 @@ use shared::world::realm::Realm;
 use crate::network::buffered_client::CurrentFrameInputs;
 use crate::render::FpsCam;
 use crate::world::ClientWorldMap;
-use crate::Block;
 
 use super::PlayerControlled;
 
@@ -34,15 +33,11 @@ impl Plugin for MovementPlugin {
     }
 }
 
-/// Block the entity is standing on (used for footstep sounds and friction info)
-#[derive(Component)]
-pub struct SteppingOn(pub Block);
-
 #[derive(Component)]
 pub struct Crouching(pub bool);
 
-// Re-export shared movement mode marker (Flying already imported above)
-pub use shared::physics::Walking;
+// Re-export shared physics components for other client modules
+pub use shared::physics::{SteppingOn, Walking};
 
 /// Updates the SteppingOn component to track what block the player is standing on.
 /// This is used for footstep sounds and other effects.

@@ -135,7 +135,6 @@ impl PhysicsState {
 #[derive(Debug, Clone)]
 pub struct PhysicsStepResult {
     pub new_velocity: Vec3,
-    pub on_ground: bool,
 }
 
 /// Avian3d player physics bundle with dynamic rigid body.
@@ -305,7 +304,6 @@ pub fn compute_desired_velocity(
 
             PhysicsStepResult {
                 new_velocity: velocity,
-                on_ground: false,
             }
         }
         MovementMode::Walking => {
@@ -338,7 +336,6 @@ pub fn compute_desired_velocity(
 
             PhysicsStepResult {
                 new_velocity: velocity,
-                on_ground: state.on_ground,
             }
         }
     }

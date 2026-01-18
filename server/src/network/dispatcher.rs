@@ -4,7 +4,8 @@ use crate::network::broadcast_world::{
 };
 use crate::network::players::{
     broadcast_player_updates_system, handle_player_inputs_system, update_server_ground_state,
-    ClientReportedPredictedPosition, PlayerInputsEvent, PlayerRegistry, ServerPhysicsState,
+    update_server_stepped_block, ClientReportedPredictedPosition, PlayerInputsEvent,
+    PlayerRegistry, ServerPhysicsState,
 };
 use bevy::log::info;
 use bevy::prelude::*;
@@ -14,7 +15,7 @@ use shared::messages::{
     ServerToClientMessage, ServerToClientPlayerSpawn,
 };
 use shared::net::clock;
-use shared::physics::{MovementMode, OnGround, PlayerPhysicsBundle};
+use shared::physics::{MovementMode, OnGround, PlayerPhysicsBundle, SteppingOn};
 use shared::world::realm::Realm;
 use shared::world::WorldSeed;
 use shared::GameServerConfig;
@@ -54,6 +55,7 @@ impl Plugin for ServerNetworkPlugin {
             Update,
             (
                 update_server_ground_state,
+                update_server_stepped_block,
                 handle_player_inputs_system,
                 broadcast_player_updates_system,
             )
@@ -222,6 +224,7 @@ fn handle_auth_requests(
             ClientReportedPredictedPosition(spawn_position),
             PlayerPhysicsBundle::new(),
             OnGround::default(),
+            SteppingOn::default(),
         ));
         info!(
             "Spawned ECS entity for player {} at {:?}",

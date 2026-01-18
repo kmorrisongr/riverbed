@@ -5,14 +5,15 @@ use shared::messages::{
     ClientToServerPlayerInput, PlayerId, ServerToClientMessage, ServerToClientPlayerUpdate,
 };
 use shared::physics::{
-    is_on_ground_from_contacts, player_step::apply_player_input_step, LinearVelocity, MovementMode,
-    OnGround, PhysicsState,
+    get_stepped_block, is_on_ground_from_contacts, player_step::apply_player_input_step,
+    LinearVelocity, MovementMode, OnGround, PhysicsState, SteppingOn, PLAYER_QUERY_BOUNDS,
 };
 use shared::world::realm::Realm;
 use std::collections::HashMap;
 
 use super::dispatcher::NetworkPlayer;
 use super::extensions::SendGameMessageExtension;
+use crate::world::voxel_world::VoxelWorld;
 
 // Re-export from shared for backward compatibility
 pub use shared::DEFAULT_SPAWN_POSITION;
@@ -44,6 +45,21 @@ pub fn update_server_ground_state(
 ) {
     for (entity, mut on_ground) in query.iter_mut() {
         on_ground.0 = is_on_ground_from_contacts(&collisions, entity);
+    }
+}
+
+/// Updates SteppingOn component to track what block players are standing on.
+///
+/// This is used for surface-specific friction and effects. The server tracks
+/// this authoritatively so that physics calculations use consistent surface data.
+pub fn update_server_stepped_block(
+    world: Option<Res<VoxelWorld>>,
+    mut query: Query<(&Transform, &Realm, &mut SteppingOn), With<NetworkPlayer>>,
+) {
+    let Some(world) = world else { return };
+    
+    for (transform, realm, mut stepping_on) in query.iter_mut() {
+        stepping_on.0 = get_stepped_block(&*world, transform.translation, *realm, PLAYER_QUERY_BOUNDS);
     }
 }
 

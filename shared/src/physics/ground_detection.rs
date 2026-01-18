@@ -1,11 +1,13 @@
 //! Ground detection using avian3d collision contacts.
 //!
-//! This module provides systems to update ground state based on avian3d's
-//! collision detection. A contact with an upward-pointing normal indicates
-//! the player is standing on something.
+//! This module provides components and systems for ground state tracking:
+//! - `OnGround`: Whether an entity is standing on a surface (from avian3d contacts)
+//! - `SteppingOn`: Which block type the entity is standing on (for surface effects)
 
 use avian3d::prelude::Collisions;
 use bevy::prelude::*;
+
+use crate::block::Block;
 
 /// Minimum Y component of contact normal to count as "ground".
 /// 0.7 corresponds to approximately a 45-degree slope.
@@ -15,6 +17,24 @@ pub const GROUND_NORMAL_THRESHOLD: f32 = 0.7;
 /// Updated each frame from avian3d collision data.
 #[derive(Component, Debug, Default, Clone, Copy)]
 pub struct OnGround(pub bool);
+
+/// Component that tracks which block type an entity is standing on.
+///
+/// This is used for gameplay effects like:
+/// - Footstep sounds (different sounds for stone vs dirt vs wood)
+/// - Surface-specific friction (ice is slippery, soul sand is slow)
+/// - Visual effects (dust particles on sand, etc.)
+///
+/// Updated by querying the voxel world directly (not avian3d contacts),
+/// since we need to know the actual block type, not just collision geometry.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct SteppingOn(pub Block);
+
+impl Default for SteppingOn {
+    fn default() -> Self {
+        Self(Block::Air)
+    }
+}
 
 /// Check if any contact normal indicates standing on ground.
 ///

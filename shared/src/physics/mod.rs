@@ -31,7 +31,7 @@ pub use avian_physics::{
 
 // Re-export ground detection from avian3d contacts
 pub use ground_detection::{
-    is_on_ground_from_contacts, OnGround,
+    is_on_ground_from_contacts, OnGround, SteppingOn,
     GROUND_NORMAL_THRESHOLD,
 };
 
