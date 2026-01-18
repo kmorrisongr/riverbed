@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use shared::world::block_entities::BlockEntities;
-
-use crate::world::ColUnloadEvent;
+use shared::world::ColUnloadEvent;
 
 pub fn unload_block_entities(
     mut commands: Commands,

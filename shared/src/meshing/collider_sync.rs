@@ -8,9 +8,10 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 
-use crate::world::pos::pos2d::{chunks_in_col, ColPos};
+use crate::world::pos::pos2d::chunks_in_col;
 use crate::world::pos::pos3d::ChunkPos;
 use crate::world::chunk::Chunk;
+use crate::world::ColUnloadEvent;
 
 use super::chunk_collider::ChunkColliderBundle;
 
@@ -18,12 +19,6 @@ use super::chunk_collider::ChunkColliderBundle;
 #[derive(Message, Debug, Clone, Copy)]
 pub struct ChunkColliderUpdate {
     pub chunk_pos: ChunkPos,
-}
-
-/// Event indicating a column was unloaded and its colliders should be removed.
-#[derive(Message, Debug, Clone, Copy)]
-pub struct ColColliderUnload {
-    pub col_pos: ColPos,
 }
 
 /// Resource mapping chunk positions to their collider entities.
@@ -71,11 +66,11 @@ pub fn update_chunk_colliders<P: ChunkProvider + Resource>(
 /// System that removes chunk colliders when columns are unloaded.
 pub fn remove_column_colliders(
     mut commands: Commands,
-    mut events: MessageReader<ColColliderUnload>,
+    mut events: MessageReader<ColUnloadEvent>,
     mut collider_entities: ResMut<ChunkColliderEntities>,
 ) {
     for event in events.read() {
-        for chunk_pos in chunks_in_col(&event.col_pos) {
+        for chunk_pos in chunks_in_col(&event.0) {
             if let Some(entity) = collider_entities.entities.remove(&chunk_pos) {
                 commands.entity(entity).despawn();
             }
@@ -88,6 +83,10 @@ pub fn remove_column_colliders(
 /// This plugin sets up the systems needed to automatically maintain chunk
 /// colliders as the world changes. It requires the physics plugin to be
 /// added separately.
+/// 
+/// Note: This plugin does NOT register `ColUnloadEvent` - the caller must
+/// ensure it's registered (typically via their world plugin) since it's
+/// a shared event used by multiple systems.
 pub struct ChunkColliderPlugin<P: ChunkProvider + Resource> {
     _marker: std::marker::PhantomData<P>,
 }
@@ -110,7 +109,6 @@ impl<P: ChunkProvider + Resource> Plugin for ChunkColliderPlugin<P> {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChunkColliderEntities>()
             .add_message::<ChunkColliderUpdate>()
-            .add_message::<ColColliderUnload>()
             .add_systems(Update, update_chunk_colliders::<P>)
             .add_systems(Update, remove_column_colliders);
     }

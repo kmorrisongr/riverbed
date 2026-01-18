@@ -2,7 +2,7 @@ use crate::{
     generation::TerrainGenerator,
     logging::{LogEventSender, LogEventSenderExt},
     network::players::ClientReportedPredictedPosition,
-    world::{voxel_world::VoxelWorld, ColUnloadEvent},
+    world::voxel_world::VoxelWorld,
 };
 use bevy::prelude::*;
 use bevy::tasks::AsyncComputeTaskPool;
@@ -13,6 +13,7 @@ use shared::{
         pos::{pos2d::ColPos, PlayerCol},
         realm::Realm,
         world_rng::WorldRng,
+        ColUnloadEvent,
     },
 };
 use std::collections::{HashMap, HashSet};

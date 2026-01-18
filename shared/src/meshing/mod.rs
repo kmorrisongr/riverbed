@@ -14,6 +14,6 @@ mod greedy;
 
 pub use greedy::{extract_quads, ChunkQuads, QuadData};
 pub use collider_sync::{
-    ChunkColliderPlugin, ChunkColliderUpdate, ChunkProvider, ColColliderUnload,
+    ChunkColliderPlugin, ChunkColliderUpdate, ChunkProvider,
     ChunkColliderEntities,
 };

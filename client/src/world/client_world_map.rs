@@ -145,9 +145,8 @@ pub struct BlockChanged {
     pub new_block: Block,
 }
 
-/// Event sent when a column is unloaded (either locally or from server)
-#[derive(Message, Debug, Clone)]
-pub struct ColUnloadEvent(pub ColPos);
+// Re-export ColUnloadEvent from shared for convenience
+pub use shared::world::ColUnloadEvent;
 
 /// Plugin to set up the client world system
 pub struct ClientWorldPlugin;
@@ -161,18 +160,7 @@ impl Plugin for ClientWorldPlugin {
             // Add chunk collider plugin for physics
             .add_plugins(shared::meshing::ChunkColliderPlugin::<ClientWorldMap>::new())
             .add_systems(Update, process_block_requests)
-            .add_systems(Update, unload_distant_columns)
-            .add_systems(Update, bridge_col_unload_to_colliders);
-    }
-}
-
-/// Bridge ColUnloadEvent to ColColliderUnload for the collider system.
-fn bridge_col_unload_to_colliders(
-    mut col_unload: MessageReader<ColUnloadEvent>,
-    mut collider_unload: MessageWriter<shared::meshing::ColColliderUnload>,
-) {
-    for event in col_unload.read() {
-        collider_unload.write(shared::meshing::ColColliderUnload { col_pos: event.0 });
+            .add_systems(Update, unload_distant_columns);
     }
 }
 
