@@ -1,3 +1,10 @@
+//! Player input step for shared physics simulation.
+//!
+//! This module provides the `apply_player_input_step` function which processes
+//! player input and runs a physics simulation step. This function is used by
+//! both client (for prediction) and server (for authority) to ensure identical
+//! movement behavior.
+
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 
@@ -6,6 +13,7 @@ use crate::physics::{
     actions_to_movement_input, simulate_physics_step, MovementMode, PhysicsState, PhysicsStepResult,
 };
 use crate::world::block_access::BlockAccess;
+
 
 /// Result of applying a single input frame to a player's physics state.
 #[derive(Debug, Clone, Copy)]
