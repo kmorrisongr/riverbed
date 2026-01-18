@@ -135,19 +135,26 @@ pub fn extract_quads(chunk: &Chunk, lod: usize) -> ChunkQuads {
 const MASK_XYZ: u64 = 0b111111_111111_111111;
 
 /// Convert chunk data to voxel array with LOD support.
+///
+/// For LOD=1, returns the unpacked data directly.
+/// For LOD>1, reads directly from the packed data during downsampling
+/// to avoid allocating an intermediate full-resolution array.
 fn voxel_data_lod(chunk: &Chunk, lod: usize) -> Vec<u16> {
-    let voxels = chunk.data.unpack_u16();
     if lod == 1 {
-        return voxels;
+        // Fast path: just unpack directly
+        return chunk.data.unpack_u16();
     }
 
-    let mut res = vec![0; CHUNKP_S3];
+    // For LOD > 1: read directly from packed data during downsampling
+    // This avoids allocating a full CHUNKP_S3 array just to downsample it
+    let mut res = vec![0u16; CHUNKP_S3];
     for x in 0..CHUNK_S1 {
         for y in 0..CHUNK_S1 {
             for z in 0..CHUNK_S1 {
                 let lod_i = pad_linearize(x / lod, y / lod, z / lod);
                 if res[lod_i] == 0 {
-                    res[lod_i] = voxels[pad_linearize(x, y, z)];
+                    // Read directly from packed storage instead of unpacking first
+                    res[lod_i] = chunk.data.get(pad_linearize(x, y, z)) as u16;
                 }
             }
         }
