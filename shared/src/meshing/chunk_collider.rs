@@ -48,7 +48,14 @@ impl StaticChunkColliderBundle {
     /// Returns `None` if the chunk has no solid geometry (all air).
     pub fn new(chunk: &Chunk, chunk_pos: ChunkPos) -> Option<Self> {
         let collider = generate_chunk_trimesh_collider(chunk)?;
+        Some(Self::from_collider(collider, chunk_pos))
+    }
 
+    /// Build a static chunk collider bundle from a precomputed collider.
+    ///
+    /// Useful when collider cooking happens off-thread and we already have
+    /// a cooked collider available.
+    pub fn from_collider(collider: Collider, chunk_pos: ChunkPos) -> Self {
         // Calculate world position of chunk origin
         let world_pos = Vec3::new(
             (chunk_pos.x * CHUNK_S1 as i32) as f32,
@@ -56,13 +63,13 @@ impl StaticChunkColliderBundle {
             (chunk_pos.z * CHUNK_S1 as i32) as f32,
         );
 
-        Some(Self {
+        Self {
             tag: StaticChunkColliderTag { chunk_pos },
             collider,
             rigid_body: RigidBody::Static,
             position: Position(world_pos),
             rotation: Rotation::default(),
-        })
+        }
     }
 }
 
