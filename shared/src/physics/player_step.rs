@@ -13,8 +13,9 @@ use bevy::prelude::*;
 
 use crate::messages::TransmittableAction;
 use crate::physics::{
-    actions_to_movement_input, compute_desired_velocity, MovementMode, PhysicsState,
+    actions_to_movement_input, compute_desired_velocity, LinearVelocity, MovementMode, PhysicsState,
 };
+use crate::world::realm::Realm;
 
 /// Result of applying a single input frame to a player's physics state.
 #[derive(Debug, Clone, Copy)]
@@ -73,4 +74,37 @@ pub fn apply_player_input_step(
         on_ground: state.on_ground,
         movement_mode,
     }
+}
+
+/// Shared helper that applies a single input frame directly to ECS components.
+///
+/// This is used by both client prediction and the authoritative server to avoid
+/// duplicating the "build PhysicsState -> step -> write components" boilerplate.
+pub fn apply_player_input_to_components(
+    transform: &Transform,
+    linear_velocity: &mut LinearVelocity,
+    movement_mode: &mut MovementMode,
+    realm: Realm,
+    on_ground: bool,
+    actions: &HashSet<TransmittableAction>,
+    camera: &Transform,
+    delta_seconds: f32,
+) -> PlayerStepOutput {
+    let state = PhysicsState::from_components(
+        transform.translation,
+        Vec3::from(linear_velocity.0),
+        *movement_mode,
+        realm,
+        on_ground,
+    );
+
+    let step = apply_player_input_step(&state, actions, camera, delta_seconds);
+
+    // Write outputs back to components for simulation
+    linear_velocity.0 = step.velocity.into();
+    if step.movement_mode != *movement_mode {
+        *movement_mode = step.movement_mode;
+    }
+
+    step
 }

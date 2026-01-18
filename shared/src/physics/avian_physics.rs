@@ -190,14 +190,14 @@ impl Default for PlayerPhysicsBundle {
 }
 
 // =============================================================================
-// Block Query Functions (for gameplay logic, not physics collision)
+// Block Query Functions (gameplay-only, not physics collision)
 // =============================================================================
 // These functions query the voxel world directly for gameplay purposes like
 // footstep sounds and surface friction. For physics collision/ground detection,
-// use `is_on_ground_from_contacts` which queries avian3d's collision data.
+// rely on `OnGround` which is populated from avian3d collision contacts.
 // =============================================================================
 
-/// Get block positions below the player for ground detection.
+/// Get block positions below the player for surface queries (e.g., footsteps).
 fn blocks_below(pos: Vec3, realm: Realm, aabb: Vec3) -> impl Iterator<Item = BlockPos> {
     let y = (pos.y - 0.01).floor() as i32;
     let x_start = pos.x.floor() as i32;
@@ -208,30 +208,6 @@ fn blocks_below(pos: Vec3, realm: Realm, aabb: Vec3) -> impl Iterator<Item = Blo
     (x_start..=x_end)
         .flat_map(move |x| (z_start..=z_end).map(move |z| (x, z)))
         .map(move |(x, z)| BlockPos { x, y, z, realm })
-}
-
-/// Check if the entity is standing on a solid block (for gameplay effects).
-///
-/// This queries the voxel world directly - use it for:
-/// - Footstep sound triggers
-/// - Surface-specific effects
-/// - Block interaction availability
-///
-/// **For physics ground detection** (jumping, gravity), use `OnGround` component
-/// which is updated from avian3d's collision contacts.
-pub fn check_on_ground<W: BlockAccess>(
-    world: &W,
-    position: Vec3,
-    realm: Realm,
-    aabb: Vec3,
-) -> bool {
-    for block_pos in blocks_below(position, realm, aabb) {
-        let block = world.get_block_safe(block_pos);
-        if !block.is_traversable() {
-            return true;
-        }
-    }
-    false
 }
 
 /// Get the block the entity is standing on (for friction/slowing calculations)
@@ -380,49 +356,6 @@ pub fn actions_to_movement_input(
 }
 
 // =============================================================================
-// Movement Mode Marker Components (Deprecated)
-// =============================================================================
-// These marker components are deprecated in favor of using `MovementMode`
-// directly as a component. They are kept temporarily for backward compatibility
-// during migration but should be removed once all code uses `MovementMode`.
-// =============================================================================
-
-/// Marker component for walking movement mode.
-/// 
-/// **Deprecated**: Use `MovementMode::Walking` component instead.
-#[derive(Component)]
-#[deprecated(note = "Use MovementMode component directly")]
-pub struct Walking;
-
-/// Marker component for flying movement mode.
-/// 
-/// **Deprecated**: Use `MovementMode::Flying` component instead.
-#[derive(Component)]
-#[deprecated(note = "Use MovementMode component directly")]
-pub struct Flying;
-
-/// Sync movement mode marker components on an entity.
-///
-/// **Deprecated**: This function syncs the old marker components. New code
-/// should use `MovementMode` as a component directly and mutate it.
-#[deprecated(note = "Use MovementMode component directly")]
-pub fn sync_movement_mode_components(
-    commands: &mut Commands,
-    entity: Entity,
-    new_mode: MovementMode,
-    was_flying: bool,
-) {
-    let new_is_flying = new_mode == MovementMode::Flying;
-    if new_is_flying != was_flying {
-        if new_is_flying {
-            commands.entity(entity).remove::<Walking>().insert(Flying);
-        } else {
-            commands.entity(entity).remove::<Flying>().insert(Walking);
-        }
-    }
-}
-
-// =============================================================================
 // Avian3d Plugin Integration
 // =============================================================================
 
@@ -488,16 +421,16 @@ mod tests {
     }
 
     #[test]
-    fn test_ground_detection() {
+    fn test_stepped_block_query() {
         let world = TestWorld;
 
-        // Player at y=0 should be on ground (floor at y=-1)
-        let on_ground = check_on_ground(&world, Vec3::new(0.0, 0.0, 0.0), Realm::Overworld, PLAYER_QUERY_BOUNDS);
-        assert!(on_ground);
+        // At y=0 we should see the granite floor below
+        let block = get_stepped_block(&world, Vec3::new(0.0, 0.0, 0.0), Realm::Overworld, PLAYER_QUERY_BOUNDS);
+        assert_eq!(block, Block::Granite);
 
-        // Player at y=5 should not be on ground
-        let on_ground = check_on_ground(&world, Vec3::new(0.0, 5.0, 0.0), Realm::Overworld, PLAYER_QUERY_BOUNDS);
-        assert!(!on_ground);
+        // Far above the floor should return air
+        let block = get_stepped_block(&world, Vec3::new(0.0, 5.0, 0.0), Realm::Overworld, PLAYER_QUERY_BOUNDS);
+        assert_eq!(block, Block::Air);
     }
 
     #[test]

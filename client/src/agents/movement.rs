@@ -7,8 +7,8 @@
 
 use bevy::prelude::*;
 use shared::physics::{
-    player_step::apply_player_input_step, update_ground_state_system,
-    update_stepped_block_system, LinearVelocity, MovementMode, OnGround, PhysicsState,
+    apply_player_input_to_components, update_ground_state_system,
+    update_stepped_block_system, LinearVelocity, MovementMode, OnGround,
 };
 use shared::world::realm::Realm;
 
@@ -78,28 +78,15 @@ fn apply_movement_input(
     // Get camera transform for movement orientation
     let camera_transform = camera_query.single().copied().unwrap_or_default();
 
-    let state = PhysicsState::from_components(
-        transform.translation,
-        Vec3::from(linear_velocity.0),
-        *movement_mode,
+    let delta_seconds = time.delta_secs();
+    apply_player_input_to_components(
+        transform,
+        &mut linear_velocity,
+        &mut movement_mode,
         *realm,
         on_ground.0,
-    );
-
-    // Compute desired velocity
-    let delta_seconds = time.delta_secs();
-    let step = apply_player_input_step(
-        &state,
         &frame_inputs.0.inputs,
         &camera_transform,
         delta_seconds,
     );
-
-    // Set velocity - avian3d will integrate and resolve collisions
-    linear_velocity.0 = step.velocity.into();
-
-    // Update movement mode if changed
-    if step.movement_mode != *movement_mode {
-        *movement_mode = step.movement_mode;
-    }
 }

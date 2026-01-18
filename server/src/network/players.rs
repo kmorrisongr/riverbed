@@ -4,7 +4,7 @@ use shared::messages::{
     ClientToServerPlayerInput, PlayerId, ServerToClientMessage, ServerToClientPlayerUpdate,
 };
 use shared::physics::{
-    player_step::apply_player_input_step, LinearVelocity, MovementMode, OnGround, PhysicsState,
+    apply_player_input_to_components, LinearVelocity, MovementMode, OnGround,
 };
 use shared::world::realm::Realm;
 use std::collections::HashMap;
@@ -142,28 +142,16 @@ pub fn handle_player_inputs_system(
         }
 
         let delta_seconds = ev.input.delta_ms as f32 / 1000.0;
-        let state = PhysicsState::from_components(
-            transform.translation,
-            Vec3::from(linear_velocity.0),
-            *movement_mode,
+        apply_player_input_to_components(
+            transform,
+            &mut linear_velocity,
+            &mut movement_mode,
             *realm,
             on_ground.0,
-        );
-
-        let step = apply_player_input_step(
-            &state,
             &ev.input.inputs,
             &ev.input.camera,
             delta_seconds,
         );
-
-        // Set velocity - avian3d will integrate and resolve collisions
-        linear_velocity.0 = step.velocity.into();
-        
-        // Update movement mode if changed
-        if step.movement_mode != *movement_mode {
-            *movement_mode = step.movement_mode;
-        }
 
         player.last_input_processed = ev.input.time_ms;
     }
