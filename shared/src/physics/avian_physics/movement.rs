@@ -1,17 +1,7 @@
-//! Avian3d-based physics simulation for voxel worlds.
-//!
-//! This module provides physics simulation using avian3d with chunk-level
-//! trimesh colliders for the voxel world. Players use dynamic rigid bodies
-//! and avian3d handles collision detection and response.
-//!
-//! Key features:
-//! - Uses avian3d `RigidBody::Dynamic` for players with capsule colliders
-//! - Chunk colliders are `RigidBody::Static` trimeshes (see meshing module)
-//! - Custom kinematics: we control velocity directly, avian3d resolves collisions
-//! - Supports both walking and flying movement modes
-//! - Server-authoritative design with client-side prediction support
+//! Movement and kinematics shared by client and server, with avian3d resolving collisions.
 
-use avian3d::prelude::*;
+use avian3d::prelude::LinearVelocity;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::{FLY_SPEED, FLY_VERTICAL_SPEED, WALK_SPEED};
@@ -32,9 +22,6 @@ pub const GROUND_FRICTION: f32 = 8.0;
 pub const AIR_FRICTION: f32 = 2.0;
 
 /// Represents the movement mode of an entity.
-///
-/// This is now used directly as a component on player entities, replacing
-/// the previous `Walking`/`Flying` marker components.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum MovementMode {
     #[default]
@@ -52,8 +39,6 @@ impl MovementMode {
 }
 
 /// Input state for a single physics tick.
-/// 
-/// This struct captures all input needed for one frame of physics simulation.
 #[derive(Debug, Clone, Default)]
 pub struct MovementInput {
     /// Horizontal movement direction (normalized), relative to camera
@@ -68,71 +53,22 @@ pub struct MovementInput {
     pub camera_right: Vec3,
 }
 
-/// Avian3d player physics bundle with dynamic rigid body.
-///
-/// Uses a capsule collider for smooth movement over terrain.
-/// Avian3d handles collision detection and response against chunk colliders.
-/// We control movement by setting LinearVelocity directly (custom kinematics).
-#[derive(Bundle)]
-pub struct PlayerPhysicsBundle {
-    pub rigid_body: RigidBody,
-    pub collider: Collider,
-    pub linear_velocity: LinearVelocity,
-    pub angular_velocity: AngularVelocity,
-    pub locked_axes: LockedAxes,
-    pub gravity_scale: GravityScale,
-    pub friction: Friction,
-    pub restitution: Restitution,
-    pub ccd: SweptCcd,
+/// Result of applying a single input frame to a player's physics state.
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct PlayerStepOutput {
+    /// The desired velocity (avian3d will apply this and resolve collisions)
+    pub velocity: Vec3,
+    /// Whether the player was on ground this frame (passed through from input state,
+    /// used by callers for sound/visual effects - not modified by velocity computation)
+    pub on_ground: bool,
+    /// The current movement mode (may change if fly toggle was pressed)
+    pub movement_mode: MovementMode,
 }
-
-impl PlayerPhysicsBundle {
-    /// Create a new player physics bundle.
-    ///
-    /// Uses a dynamic rigid body with capsule collider. Avian3d will handle
-    /// collision detection against chunk trimesh colliders.
-    pub fn new() -> Self {
-        Self {
-            rigid_body: RigidBody::Dynamic,
-            collider: Collider::capsule(PLAYER_CAPSULE_RADIUS, PLAYER_CAPSULE_HEIGHT),
-            linear_velocity: LinearVelocity::default(),
-            angular_velocity: AngularVelocity::default(),
-            // Lock all rotation to prevent tipping over
-            locked_axes: LockedAxes::ROTATION_LOCKED,
-            // Use standard gravity (configured via Gravity resource)
-            gravity_scale: GravityScale(1.0),
-            // Low friction for responsive movement
-            friction: Friction::new(0.1),
-            // No bounce
-            restitution: Restitution::new(0.0),
-            // Enable continuous collision detection for fast movement
-            ccd: SweptCcd::default(),
-        }
-    }
-}
-
-impl Default for PlayerPhysicsBundle {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// =============================================================================
-// Velocity Computation (Custom Kinematics)
-// =============================================================================
 
 /// Compute the desired velocity for a player based on input and current state.
 ///
 /// This implements "custom kinematics" - we compute what velocity we want,
 /// and avian3d handles collision resolution against chunk colliders.
-///
-/// For walking mode:
-/// - Horizontal velocity is computed from input with acceleration/friction
-/// - Vertical velocity is passed through (avian3d applies gravity)
-/// - Jump impulse is applied when grounded and jump is pressed
-///
-/// For flying mode:
-/// - Direct velocity control, no gravity
 pub fn compute_desired_velocity(
     velocity: Vec3,
     movement_mode: MovementMode,
@@ -176,11 +112,7 @@ pub fn compute_desired_velocity(
             }
 
             // Use ground or air friction based on contact state
-            let friction = if on_ground {
-                GROUND_FRICTION
-            } else {
-                AIR_FRICTION
-            };
+            let friction = if on_ground { GROUND_FRICTION } else { AIR_FRICTION };
 
             // Smoothly accelerate horizontal velocity towards target
             let velocity_diff = Vec3::new(
@@ -191,7 +123,9 @@ pub fn compute_desired_velocity(
 
             let diff_magnitude = velocity_diff.length();
             if diff_magnitude > 0.0 {
-                let accel_factor = (delta_seconds * friction * GROUND_ACCELERATION / diff_magnitude.max(1.0)).min(1.0);
+                let accel_factor = (delta_seconds * friction * GROUND_ACCELERATION
+                    / diff_magnitude.max(1.0))
+                    .min(1.0);
                 velocity.x += velocity_diff.x * accel_factor;
                 velocity.z += velocity_diff.z * accel_factor;
             }
@@ -203,7 +137,7 @@ pub fn compute_desired_velocity(
 
 /// Convert transmittable actions to movement input
 pub fn actions_to_movement_input(
-    inputs: &bevy::platform::collections::HashSet<crate::messages::TransmittableAction>,
+    inputs: &HashSet<crate::messages::TransmittableAction>,
     camera_transform: &Transform,
 ) -> MovementInput {
     use crate::messages::TransmittableAction;
@@ -236,31 +170,12 @@ pub fn actions_to_movement_input(
     }
 }
 
-// =============================================================================
-// Player Input & Movement Logic
-// =============================================================================
-
-/// Result of applying a single input frame to a player's physics state.
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub struct PlayerStepOutput {
-    /// The desired velocity (avian3d will apply this and resolve collisions)
-    pub velocity: Vec3,
-    /// Whether the player was on ground this frame (passed through from input state,
-    /// used by callers for sound/visual effects - not modified by velocity computation)
-    pub on_ground: bool,
-    /// The current movement mode (may change if fly toggle was pressed)
-    pub movement_mode: MovementMode,
-}
-
 /// Apply movement actions (including fly toggle) and compute desired velocity.
-///
-/// This is shared between client prediction and server authority to keep
-/// movement behavior identical.
 pub fn apply_player_input_step(
     velocity: Vec3,
     mut movement_mode: MovementMode,
     on_ground: bool,
-    actions: &bevy::platform::collections::HashSet<crate::messages::TransmittableAction>,
+    actions: &HashSet<crate::messages::TransmittableAction>,
     camera: &Transform,
     delta_seconds: f32,
 ) -> PlayerStepOutput {
@@ -297,14 +212,11 @@ pub fn apply_player_input_step(
 }
 
 /// Shared helper that applies a single input frame directly to ECS components.
-///
-/// This is used by both client prediction and the authoritative server to avoid
-/// duplicating the boilerplate.
 pub fn apply_player_input_to_components(
     linear_velocity: &mut LinearVelocity,
     movement_mode: &mut MovementMode,
     on_ground: bool,
-    actions: &bevy::platform::collections::HashSet<crate::messages::TransmittableAction>,
+    actions: &HashSet<crate::messages::TransmittableAction>,
     camera: &Transform,
     delta_seconds: f32,
 ) -> PlayerStepOutput {
@@ -324,32 +236,6 @@ pub fn apply_player_input_to_components(
     }
 
     step
-}
-
-// =============================================================================
-// Avian3d Plugin Integration
-// =============================================================================
-
-/// Shared physics plugin for avian3d integration.
-///
-/// This plugin sets up avian3d for voxel world physics:
-/// - Players use `RigidBody::Dynamic` with capsule colliders
-/// - Chunk terrain uses `RigidBody::Static` with trimesh colliders
-/// - Avian3d handles collision detection and response
-#[derive(Default)]
-pub struct SharedPhysicsPlugin;
-
-impl Plugin for SharedPhysicsPlugin {
-    fn build(&self, app: &mut App) {
-        use avian3d::prelude::*;
-
-        // Use full physics plugins for collision detection on both client and server
-        // The server now includes AssetPlugin so it can handle mesh colliders
-        app.add_plugins(PhysicsPlugins::default().with_length_unit(1.0));
-
-        // Configure gravity for the world
-        app.insert_resource(Gravity(Vec3::new(0.0, -PLAYER_GRAVITY, 0.0).into()));
-    }
 }
 
 #[cfg(test)]
