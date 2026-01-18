@@ -1,7 +1,5 @@
 use crate::network::block_interactions::{handle_block_interactions, BlockInteractionEvent};
-use crate::network::broadcast_world::{
-    ChunkBroadcastPlugin, ChunkDeliveryTracker, ServerTick,
-};
+use crate::network::broadcast_world::{ChunkBroadcastPlugin, ChunkDeliveryTracker, ServerTick};
 use crate::network::players::{
     broadcast_player_updates_system, handle_player_inputs_system, ClientPredictedPosition,
     PlayerInputsEvent, PlayerRegistry,

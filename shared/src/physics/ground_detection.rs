@@ -45,7 +45,11 @@ impl Default for SteppingOn {
 
 /// Get block positions beneath a capsule-centered player footprint.
 /// Assumes `pos` is the capsule center and uses the provided AABB footprint.
-fn block_positions_beneath_capsule(pos: Vec3, realm: Realm, aabb: Vec3) -> impl Iterator<Item = BlockPos> {
+fn block_positions_beneath_capsule(
+    pos: Vec3,
+    realm: Realm,
+    aabb: Vec3,
+) -> impl Iterator<Item = BlockPos> {
     // Determine Y level just below feet (assuming pos is capsule center)
     let feet_y = pos.y - (PLAYER_CAPSULE_HEIGHT / 2.0 + PLAYER_CAPSULE_RADIUS);
     let y = (feet_y - 0.01).floor() as i32;

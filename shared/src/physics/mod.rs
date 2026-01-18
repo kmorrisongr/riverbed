@@ -34,11 +34,11 @@ pub use avian3d::prelude::{
 
 // Re-export core physics types and functions from the avian integration
 pub use avian_physics::{
-    actions_to_camera_relative_input, apply_movement_step_to_components,
-    compute_desired_velocity, compute_movement_step_from_actions, MovementInput, MovementMode,
-    MovementStepResult, PlayerPhysicsBundle, AvianSharedPhysicsPlugin, AIR_FRICTION,
-    GROUND_ACCELERATION, GROUND_FRICTION, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS,
-    PLAYER_GRAVITY, PLAYER_JUMP_FORCE, PLAYER_QUERY_BOUNDS,
+    actions_to_camera_relative_input, apply_movement_step_to_components, compute_desired_velocity,
+    compute_movement_step_from_actions, AvianSharedPhysicsPlugin, MovementInput, MovementMode,
+    MovementStepResult, PlayerPhysicsBundle, AIR_FRICTION, GROUND_ACCELERATION, GROUND_FRICTION,
+    PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS, PLAYER_GRAVITY, PLAYER_JUMP_FORCE,
+    PLAYER_QUERY_BOUNDS,
 };
 
 // Re-export ground detection from avian3d contacts
