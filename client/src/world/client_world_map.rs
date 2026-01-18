@@ -158,7 +158,7 @@ impl Plugin for ClientWorldPlugin {
             .add_message::<BlockChanged>()
             .add_message::<ColUnloadEvent>()
             // Add chunk collider plugin for physics
-            .add_plugins(shared::meshing::ChunkColliderPlugin::<ClientWorldMap>::new())
+            .add_plugins(shared::meshing::ChunkColliderPlugin::<ClientWorldMap>::default())
             .add_systems(Update, process_block_requests)
             .add_systems(Update, unload_distant_columns);
     }

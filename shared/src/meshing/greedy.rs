@@ -11,7 +11,6 @@ use binary_greedy_meshing as bgm;
 use crate::block::{Block, Face};
 use crate::world::chunk::Chunk;
 use crate::world::pos::{linearize, pad_linearize};
-use crate::world::utils::Palette;
 use crate::world::{CHUNKP_S3, CHUNK_S1};
 
 /// Data for a single quad extracted from greedy meshing.
@@ -60,21 +59,9 @@ impl QuadData {
 pub struct ChunkQuads {
     /// Quads for each of the 6 faces (Left, Down, Back, Right, Up, Front)
     pub faces: [Vec<QuadData>; 6],
-    /// Reference to the chunk's palette
-    palette: Palette<Block>,
 }
 
 impl ChunkQuads {
-    /// Get quads for a specific face
-    pub fn get_face(&self, face: Face) -> &[QuadData] {
-        &self.faces[face as usize]
-    }
-
-    /// Get the palette used for this chunk
-    pub fn palette(&self) -> &Palette<Block> {
-        &self.palette
-    }
-
     /// Check if all faces have no quads (empty chunk)
     pub fn is_empty(&self) -> bool {
         self.faces.iter().all(|f| f.is_empty())
@@ -143,7 +130,7 @@ pub fn extract_quads(chunk: &Chunk, lod: usize) -> ChunkQuads {
         }
     }
 
-    ChunkQuads { faces, palette }
+    ChunkQuads { faces }
 }
 
 /// Mask to extract XYZ from packed quad data

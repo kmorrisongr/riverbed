@@ -87,21 +87,11 @@ pub fn remove_column_colliders(
 /// Note: This plugin does NOT register `ColUnloadEvent` - the caller must
 /// ensure it's registered (typically via their world plugin) since it's
 /// a shared event used by multiple systems.
-pub struct ChunkColliderPlugin<P: ChunkProvider + Resource> {
-    _marker: std::marker::PhantomData<P>,
-}
+pub struct ChunkColliderPlugin<P: ChunkProvider + Resource>(std::marker::PhantomData<P>);
 
 impl<P: ChunkProvider + Resource> Default for ChunkColliderPlugin<P> {
     fn default() -> Self {
-        Self {
-            _marker: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<P: ChunkProvider + Resource> ChunkColliderPlugin<P> {
-    pub fn new() -> Self {
-        Self::default()
+        Self(std::marker::PhantomData)
     }
 }
 

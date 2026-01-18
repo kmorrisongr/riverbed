@@ -128,7 +128,7 @@ pub fn configure_server_app(
     app.add_plugins(SharedPhysicsPlugin::server());
 
     // Chunk collider plugin for physics
-    app.add_plugins(ChunkColliderPlugin::<VoxelWorld>::new());
+    app.add_plugins(ChunkColliderPlugin::<VoxelWorld>::default());
 
     // Always insert LogEventSender (needed by terrain thread), but only broadcast when configured
     if config.add_log_broadcast {
