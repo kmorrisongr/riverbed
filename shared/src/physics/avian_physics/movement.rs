@@ -6,19 +6,39 @@ use bevy::prelude::*;
 
 use crate::{FLY_SPEED, FLY_VERTICAL_SPEED, WALK_SPEED};
 
-/// Player physics constants
+// =============================================================================
+// Player Physics Constants
+// =============================================================================
+
+/// Gravitational acceleration for players (units/s²).
+/// Higher values = faster falling.
 pub const PLAYER_GRAVITY: f32 = 50.0;
+
+/// Instantaneous vertical velocity applied when jumping (units/s).
 pub const PLAYER_JUMP_FORCE: f32 = 13.0;
-/// Player capsule collider dimensions
+
+/// Radius of the player's capsule collider (meters).
 pub const PLAYER_CAPSULE_RADIUS: f32 = 0.3;
-pub const PLAYER_CAPSULE_HEIGHT: f32 = 1.1; // Total height = height + 2*radius = 1.7
-/// Player query bounds for block lookups below the player (width, height, depth)
+
+/// Height of the cylindrical portion of the player's capsule collider.
+/// Total player height = PLAYER_CAPSULE_HEIGHT + 2 * PLAYER_CAPSULE_RADIUS = 1.7m
+pub const PLAYER_CAPSULE_HEIGHT: f32 = 1.1;
+
+/// Axis-aligned bounding box for querying blocks near the player's feet.
+/// Used for ground detection and stepped-block queries (footstep sounds, etc.).
+/// Format: (width, height, depth) in meters.
 pub const PLAYER_QUERY_BOUNDS: Vec3 = Vec3::new(0.6, 1.7, 0.6);
-/// Base acceleration rate for ground movement (units/s² per unit of friction)
+
+/// Base acceleration rate for ground movement (units/s² per unit of friction).
+/// Combined with friction coefficient to determine how quickly velocity changes.
 pub const GROUND_ACCELERATION: f32 = 150.0;
-/// Friction coefficient when on ground (higher = more responsive)
+
+/// Friction coefficient when standing on ground.
+/// Higher values = more responsive movement (faster acceleration/deceleration).
 pub const GROUND_FRICTION: f32 = 8.0;
-/// Friction coefficient when in air (lower = less air control)
+
+/// Friction coefficient when airborne.
+/// Lower values = less air control (maintains momentum better).
 pub const AIR_FRICTION: f32 = 2.0;
 
 /// Represents the movement mode of an entity.
@@ -55,10 +75,14 @@ pub struct MovementInput {
     pub camera_right: Vec3,
 }
 
-/// Result of applying a single input frame to a player's physics state.
+/// Result of computing a single frame of player movement.
+///
+/// This struct captures the output of velocity computation for a single physics tick.
+/// It's used by both client (for prediction) and server (for authoritative simulation)
+/// to ensure identical movement logic.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub struct PlayerStepOutput {
-    /// The desired velocity (avian3d will apply this and resolve collisions)
+pub struct MovementStepResult {
+    /// The computed desired velocity (avian3d will apply this and resolve collisions)
     pub velocity: Vec3,
     /// Whether the player was on ground this frame (passed through from input state,
     /// used by callers for sound/visual effects - not modified by velocity computation)
@@ -184,7 +208,7 @@ pub fn apply_player_input_step(
     actions: &HashSet<crate::messages::TransmittableAction>,
     camera: &Transform,
     delta_seconds: f32,
-) -> PlayerStepOutput {
+) -> MovementStepResult {
     let mut current_velocity = velocity;
 
     // Handle fly-mode toggle
@@ -210,7 +234,7 @@ pub fn apply_player_input_step(
         delta_seconds,
     );
 
-    PlayerStepOutput {
+    MovementStepResult {
         velocity: new_velocity,
         on_ground,
         movement_mode,
@@ -218,6 +242,9 @@ pub fn apply_player_input_step(
 }
 
 /// Shared helper that applies a single input frame directly to ECS components.
+///
+/// This is the primary entry point for movement processing on both client and server.
+/// It computes the desired velocity, updates the ECS components, and returns the result.
 pub fn apply_player_input_to_components(
     linear_velocity: &mut LinearVelocity,
     movement_mode: &mut MovementMode,
@@ -225,7 +252,7 @@ pub fn apply_player_input_to_components(
     actions: &HashSet<crate::messages::TransmittableAction>,
     camera: &Transform,
     delta_seconds: f32,
-) -> PlayerStepOutput {
+) -> MovementStepResult {
     let step = apply_player_input_step(
         linear_velocity.0,
         *movement_mode,

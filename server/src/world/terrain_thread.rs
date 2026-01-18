@@ -1,7 +1,7 @@
 use crate::{
     generation::TerrainGenerator,
     logging::{LogEventSender, LogEventSenderExt},
-    network::players::ClientReportedPredictedPosition,
+    network::players::ClientPredictedPosition,
     world::voxel_world::VoxelWorld,
 };
 use bevy::prelude::*;
@@ -120,7 +120,7 @@ pub fn assign_player_col(
     mut commands: Commands,
     sender: Res<PlayerColumnUpdateSender>,
     log_sender: Res<LogEventSender>,
-    player_query: Query<(Entity, &ClientReportedPredictedPosition, &Realm), Without<PlayerCol>>,
+    player_query: Query<(Entity, &ClientPredictedPosition, &Realm), Without<PlayerCol>>,
 ) {
     for (player, predicted_pos, realm) in player_query.iter() {
         // Use client's predicted position for terrain generation
@@ -146,7 +146,7 @@ pub fn send_player_pos_update(
     log_sender: Res<LogEventSender>,
     mut player_query: Query<(
         Entity,
-        &ClientReportedPredictedPosition,
+        &ClientPredictedPosition,
         &Realm,
         &mut PlayerCol,
     )>,

@@ -19,16 +19,22 @@ use crate::world::chunk::Chunk;
 use crate::world::pos::pos3d::ChunkPos;
 use crate::world::CHUNK_S1;
 
-/// Component to identify chunk collider entities
+/// Marker component that identifies an entity as a chunk's physics collider.
+///
+/// This allows querying for chunk collider entities and determining which
+/// chunk a collider belongs to via the `chunk_pos` field.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ChunkCollider {
+pub struct ChunkColliderMarker {
     pub chunk_pos: ChunkPos,
 }
 
-/// Bundle for spawning a chunk collider entity
+/// Bundle for spawning a chunk collider entity.
+///
+/// Contains all components needed for a static physics collider representing
+/// a chunk's solid geometry.
 #[derive(Bundle)]
 pub struct ChunkColliderBundle {
-    pub chunk_collider: ChunkCollider,
+    pub marker: ChunkColliderMarker,
     pub collider: Collider,
     pub rigid_body: RigidBody,
     pub position: Position,
@@ -50,7 +56,7 @@ impl ChunkColliderBundle {
         );
 
         Some(Self {
-            chunk_collider: ChunkCollider { chunk_pos },
+            marker: ChunkColliderMarker { chunk_pos },
             collider,
             rigid_body: RigidBody::Static,
             position: Position(world_pos),

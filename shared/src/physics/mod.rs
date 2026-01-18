@@ -35,7 +35,7 @@ pub use avian3d::prelude::{
 // Re-export core physics types and functions from the avian integration
 pub use avian_physics::{
     actions_to_movement_input, apply_player_input_step, apply_player_input_to_components,
-    compute_desired_velocity, MovementInput, MovementMode, PlayerPhysicsBundle, PlayerStepOutput,
+    compute_desired_velocity, MovementInput, MovementMode, MovementStepResult, PlayerPhysicsBundle,
     SharedPhysicsPlugin, AIR_FRICTION, GROUND_ACCELERATION, GROUND_FRICTION, PLAYER_CAPSULE_HEIGHT,
     PLAYER_CAPSULE_RADIUS, PLAYER_GRAVITY, PLAYER_JUMP_FORCE, PLAYER_QUERY_BOUNDS,
 };

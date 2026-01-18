@@ -13,6 +13,6 @@ pub mod collider_sync;
 mod greedy;
 
 pub use collider_sync::{
-    ChunkColliderEntities, ChunkColliderPlugin, ChunkColliderUpdate, ChunkProvider,
+    ChunkColliderEntityMap, ChunkColliderPlugin, ChunkProvider, RebuildChunkColliderRequest,
 };
 pub use greedy::{extract_quads, ChunkQuads, QuadData};

@@ -1,9 +1,9 @@
 use crate::network::block_interactions::{handle_block_interactions, BlockInteractionEvent};
 use crate::network::broadcast_world::{
-    ChunkBroadcastPlugin, ServerTick, ServerToClientChunkDeliveryTracker,
+    ChunkBroadcastPlugin, ChunkDeliveryTracker, ServerTick,
 };
 use crate::network::players::{
-    broadcast_player_updates_system, handle_player_inputs_system, ClientReportedPredictedPosition,
+    broadcast_player_updates_system, handle_player_inputs_system, ClientPredictedPosition,
     PlayerInputsEvent, PlayerRegistry,
 };
 use crate::world::voxel_world::VoxelWorld;
@@ -176,7 +176,7 @@ fn handle_auth_requests(
     mut ev_auth: MessageReader<IncomingAuthRequestEvent>,
     mut server: ResMut<RenetServer>,
     mut registry: ResMut<PlayerRegistry>,
-    mut chunk_tracker: ResMut<ServerToClientChunkDeliveryTracker>,
+    mut chunk_tracker: ResMut<ChunkDeliveryTracker>,
     tick: Res<ServerTick>,
     world_seed: Res<WorldSeed>,
     existing_players: Query<(&NetworkPlayer, &Transform, &MovementMode)>,
@@ -222,7 +222,7 @@ fn handle_auth_requests(
             Transform::from_translation(spawn_position),
             Realm::Overworld,
             NetworkPlayer { client_id },
-            ClientReportedPredictedPosition(spawn_position),
+            ClientPredictedPosition(spawn_position),
             PlayerPhysicsBundle::new(),
         ));
         info!(
@@ -309,7 +309,7 @@ fn handle_player_exit(
     mut ev_exit: MessageReader<ClientDisconnectRequestEvent>,
     mut server: ResMut<RenetServer>,
     mut registry: ResMut<PlayerRegistry>,
-    mut chunk_tracker: ResMut<ServerToClientChunkDeliveryTracker>,
+    mut chunk_tracker: ResMut<ChunkDeliveryTracker>,
     config: Res<GameServerConfig>,
     mut app_exit: MessageWriter<AppExit>,
 ) {

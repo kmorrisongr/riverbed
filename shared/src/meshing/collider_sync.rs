@@ -15,15 +15,22 @@ use crate::world::ColUnloadEvent;
 
 use super::chunk_collider::ChunkColliderBundle;
 
-/// Event indicating a chunk was added or modified and needs its collider updated.
+/// Event requesting that a chunk's physics collider be generated or regenerated.
+///
+/// Sent when:
+/// - A new chunk is loaded and needs an initial collider
+/// - An existing chunk's blocks changed and the collider needs rebuilding
 #[derive(Message, Debug, Clone, Copy)]
-pub struct ChunkColliderUpdate {
+pub struct RebuildChunkColliderRequest {
     pub chunk_pos: ChunkPos,
 }
 
-/// Resource mapping chunk positions to their collider entities.
+/// Maps chunk positions to their physics collider entities.
+///
+/// This resource tracks which Entity is the physics collider for each chunk,
+/// allowing efficient lookup when colliders need to be updated or removed.
 #[derive(Resource, Default)]
-pub struct ChunkColliderEntities {
+pub struct ChunkColliderEntityMap {
     pub entities: HashMap<ChunkPos, Entity>,
 }
 
@@ -34,11 +41,11 @@ pub trait ChunkProvider: Send + Sync + 'static {
 }
 
 /// System that spawns or updates chunk collider entities when chunks change.
-pub fn update_chunk_colliders<P: ChunkProvider + Resource>(
+pub fn handle_chunk_collider_rebuild_requests<P: ChunkProvider + Resource>(
     mut commands: Commands,
-    mut events: MessageReader<ChunkColliderUpdate>,
+    mut events: MessageReader<RebuildChunkColliderRequest>,
     chunk_provider: Option<Res<P>>,
-    mut collider_entities: ResMut<ChunkColliderEntities>,
+    mut collider_entities: ResMut<ChunkColliderEntityMap>,
 ) {
     let Some(chunk_provider) = chunk_provider else {
         return;
@@ -65,11 +72,13 @@ pub fn update_chunk_colliders<P: ChunkProvider + Resource>(
     }
 }
 
-/// System that removes chunk colliders when columns are unloaded.
-pub fn remove_column_colliders(
+/// System that despawns chunk collider entities when their containing column is unloaded.
+///
+/// Listens for `ColUnloadEvent` and removes all collider entities for chunks in that column.
+pub fn despawn_colliders_for_unloaded_columns(
     mut commands: Commands,
     mut events: MessageReader<ColUnloadEvent>,
-    mut collider_entities: ResMut<ChunkColliderEntities>,
+    mut collider_entities: ResMut<ChunkColliderEntityMap>,
 ) {
     for event in events.read() {
         for chunk_pos in chunks_in_col(&event.0) {
@@ -99,9 +108,9 @@ impl<P: ChunkProvider + Resource> Default for ChunkColliderPlugin<P> {
 
 impl<P: ChunkProvider + Resource> Plugin for ChunkColliderPlugin<P> {
     fn build(&self, app: &mut App) {
-        app.init_resource::<ChunkColliderEntities>()
-            .add_message::<ChunkColliderUpdate>()
-            .add_systems(Update, update_chunk_colliders::<P>)
-            .add_systems(Update, remove_column_colliders);
+        app.init_resource::<ChunkColliderEntityMap>()
+            .add_message::<RebuildChunkColliderRequest>()
+            .add_systems(Update, handle_chunk_collider_rebuild_requests::<P>)
+            .add_systems(Update, despawn_colliders_for_unloaded_columns);
     }
 }

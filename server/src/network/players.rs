@@ -19,8 +19,13 @@ pub use shared::DEFAULT_SPAWN_POSITION;
 // - update_stepped_block_system::<NetworkPlayer, VoxelWorld>
 // =============================================================================
 
+/// The position the client predicted when sending its input.
+///
+/// The client runs local physics prediction for responsive gameplay. When sending
+/// inputs to the server, it includes its predicted position. The server stores this
+/// for diagnostic purposes (comparing client prediction vs server authority).
 #[derive(Component, Debug, Clone, Default)]
-pub struct ClientReportedPredictedPosition(pub Vec3);
+pub struct ClientPredictedPosition(pub Vec3);
 
 #[derive(Debug, Clone)]
 pub struct ServerPlayer {
@@ -100,7 +105,7 @@ pub fn handle_player_inputs_system(
         &NetworkPlayer,
         &mut LinearVelocity,
         &mut MovementMode,
-        &mut ClientReportedPredictedPosition,
+        &mut ClientPredictedPosition,
         &OnGround,
     )>,
 ) {

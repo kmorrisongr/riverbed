@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_renet::renet::{ClientId, RenetServer};
 use crossbeam::channel::Receiver;
-use shared::meshing::ChunkColliderUpdate;
+use shared::meshing::RebuildChunkColliderRequest;
 use shared::messages::{ServerToClientMessage, ServerToClientWorldUpdate};
 use shared::net::clock;
 use shared::world::chunk::Chunk;
@@ -11,7 +11,7 @@ use shared::world::realm::Realm;
 use std::collections::{HashMap, HashSet};
 
 use crate::network::dispatcher::NetworkPlayer;
-use crate::network::players::{ClientReportedPredictedPosition, PlayerRegistry};
+use crate::network::players::{ClientPredictedPosition, PlayerRegistry};
 use crate::world::voxel_world::VoxelWorld;
 
 use super::extensions::SendGameMessageExtension;
@@ -21,34 +21,40 @@ const MAX_CHUNKS_PER_CLIENT_PER_TICK: usize = 16;
 #[derive(Resource, Default)]
 pub struct ServerTick(pub u64);
 
+/// Tracks which chunks have been sent to each connected client.
+///
+/// This prevents redundantly sending the same chunk data multiple times.
+/// When a chunk changes (e.g., block placed/broken), it's invalidated so
+/// it will be re-sent on the next broadcast cycle.
 #[derive(Resource, Default)]
-pub struct ServerToClientChunkDeliveryTracker {
-    delivered_chunks_per_client: HashMap<ClientId, HashSet<ChunkPos>>,
+pub struct ChunkDeliveryTracker {
+    /// Maps each client to the set of chunk positions they've received.
+    chunks_delivered_to_client: HashMap<ClientId, HashSet<ChunkPos>>,
 }
 
-impl ServerToClientChunkDeliveryTracker {
+impl ChunkDeliveryTracker {
     pub fn mark_delivered(&mut self, client_id: ClientId, chunk_position: ChunkPos) {
-        self.delivered_chunks_per_client
+        self.chunks_delivered_to_client
             .entry(client_id)
             .or_default()
             .insert(chunk_position);
     }
 
     pub fn was_delivered(&self, client_id: ClientId, chunk_position: &ChunkPos) -> bool {
-        self.delivered_chunks_per_client
+        self.chunks_delivered_to_client
             .get(&client_id)
             .map(|chunks| chunks.contains(chunk_position))
             .unwrap_or(false)
     }
 
     pub fn invalidate_chunk(&mut self, chunk_position: &ChunkPos) {
-        for chunks in self.delivered_chunks_per_client.values_mut() {
+        for chunks in self.chunks_delivered_to_client.values_mut() {
             chunks.remove(chunk_position);
         }
     }
 
     pub fn remove_client(&mut self, client_id: ClientId) {
-        self.delivered_chunks_per_client.remove(&client_id);
+        self.chunks_delivered_to_client.remove(&client_id);
     }
 }
 
@@ -57,8 +63,8 @@ pub struct ChunkChangesReceiver(pub Receiver<ChunkPos>);
 
 pub fn process_chunk_changes(
     chunk_changes: Option<Res<ChunkChangesReceiver>>,
-    mut tracker: ResMut<ServerToClientChunkDeliveryTracker>,
-    mut collider_events: MessageWriter<ChunkColliderUpdate>,
+    mut tracker: ResMut<ChunkDeliveryTracker>,
+    mut collider_rebuild_requests: MessageWriter<RebuildChunkColliderRequest>,
 ) {
     let Some(chunk_changes) = chunk_changes else {
         return;
@@ -66,8 +72,8 @@ pub fn process_chunk_changes(
 
     while let Ok(chunk_position) = chunk_changes.0.try_recv() {
         tracker.invalidate_chunk(&chunk_position);
-        // Also notify the collider system to rebuild this chunk's collider
-        collider_events.write(ChunkColliderUpdate {
+        // Request the collider system to rebuild this chunk's collider
+        collider_rebuild_requests.write(RebuildChunkColliderRequest {
             chunk_pos: chunk_position,
         });
     }
@@ -77,9 +83,9 @@ pub fn broadcast_world_state(
     mut server: ResMut<RenetServer>,
     mut tick: ResMut<ServerTick>,
     world: Res<VoxelWorld>,
-    mut tracker: ResMut<ServerToClientChunkDeliveryTracker>,
+    mut tracker: ResMut<ChunkDeliveryTracker>,
     registry: Res<PlayerRegistry>,
-    player_query: Query<(&NetworkPlayer, &ClientReportedPredictedPosition, &Realm)>,
+    player_query: Query<(&NetworkPlayer, &ClientPredictedPosition, &Realm)>,
 ) {
     tick.0 += 1;
     let render_distance = world.render_distance as i32;
@@ -170,7 +176,7 @@ pub struct ChunkBroadcastPlugin;
 
 impl Plugin for ChunkBroadcastPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<ServerToClientChunkDeliveryTracker>()
+        app.init_resource::<ChunkDeliveryTracker>()
             .init_resource::<ServerTick>()
             .add_systems(
                 Update,
