@@ -34,7 +34,7 @@ pub const FLY_VERTICAL_SPEED: f32 = 100.0;
 pub const DEFAULT_SPAWN_POSITION: Vec3 = Vec3::new(280., 500., -150.);
 
 // Re-export physics constants for convenience
-pub use physics::{ACC_MULT, PLAYER_AABB, PLAYER_GRAVITY, PLAYER_JUMP_FORCE};
+pub use physics::{GROUND_ACCELERATION, PLAYER_GRAVITY, PLAYER_JUMP_FORCE, PLAYER_QUERY_BOUNDS};
 
 // Error message constants
 pub const UNIX_EPOCH_TIME_ERROR: &str = "System time is before UNIX_EPOCH";

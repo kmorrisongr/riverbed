@@ -8,7 +8,7 @@
 use bevy::prelude::*;
 use shared::physics::{
     get_stepped_block, player_step::apply_player_input_step, sync_movement_mode_components,
-    FreeFly, LinearVelocity, MovementMode, PhysicsState, PLAYER_AABB,
+    Flying, LinearVelocity, MovementMode, PhysicsState, PLAYER_QUERY_BOUNDS,
 };
 use shared::world::realm::Realm;
 
@@ -35,7 +35,7 @@ pub struct SteppingOn(pub Block);
 #[derive(Component)]
 pub struct Crouching(pub bool);
 
-// Re-export shared Walking component for backwards compatibility
+// Re-export shared movement mode marker (Flying already imported above)
 pub use shared::physics::Walking;
 
 /// Tracks the on_ground state for physics calculations
@@ -49,7 +49,7 @@ fn update_stepped_block(
     mut query: Query<(&Transform, &Realm, &mut SteppingOn)>,
 ) {
     for (transform, realm, mut stepping_on) in query.iter_mut() {
-        stepping_on.0 = get_stepped_block(&*world, transform.translation, *realm, PLAYER_AABB);
+        stepping_on.0 = get_stepped_block(&*world, transform.translation, *realm, PLAYER_QUERY_BOUNDS);
     }
 }
 
@@ -69,7 +69,7 @@ fn apply_movement_input(
             &Transform,
             &mut LinearVelocity,
             &Realm,
-            Option<&FreeFly>,
+            Option<&Flying>,
             Option<&OnGround>,
         ),
         (With<PlayerControlled>, Without<FpsCam>),

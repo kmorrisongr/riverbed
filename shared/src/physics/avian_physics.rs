@@ -26,10 +26,14 @@ pub const PLAYER_JUMP_FORCE: f32 = 13.0;
 /// Player capsule collider dimensions
 pub const PLAYER_CAPSULE_RADIUS: f32 = 0.3;
 pub const PLAYER_CAPSULE_HEIGHT: f32 = 1.1; // Total height = height + 2*radius = 1.7
-/// Player AABB full size (for ground detection queries)
-pub const PLAYER_AABB: Vec3 = Vec3::new(0.6, 1.7, 0.6);
-/// Acceleration multiplier for ground movement
-pub const ACC_MULT: f32 = 150.0;
+/// Player query bounds for block lookups below the player (width, height, depth)
+pub const PLAYER_QUERY_BOUNDS: Vec3 = Vec3::new(0.6, 1.7, 0.6);
+/// Base acceleration rate for ground movement (units/s² per unit of friction)
+pub const GROUND_ACCELERATION: f32 = 150.0;
+/// Friction coefficient when on ground (higher = more responsive)
+pub const GROUND_FRICTION: f32 = 8.0;
+/// Friction coefficient when in air (lower = less air control)
+pub const AIR_FRICTION: f32 = 2.0;
 
 /// Represents the movement mode of an entity
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
@@ -274,15 +278,15 @@ pub fn compute_desired_velocity(
         Vec3::ZERO
     };
 
-    // Calculate heading (desired horizontal velocity)
+    // Calculate target horizontal velocity from input direction and mode speed
     let speed = state.movement_mode.speed();
-    let heading = world_move_dir * speed;
+    let target_velocity_xz = world_move_dir * speed;
 
     match state.movement_mode {
         MovementMode::Flying => {
             // Flying mode: direct velocity control
-            velocity.x = heading.x;
-            velocity.z = heading.z;
+            velocity.x = target_velocity_xz.x;
+            velocity.z = target_velocity_xz.z;
             velocity.y = (input.jump as i32 - input.crouch as i32) as f32 * FLY_VERTICAL_SPEED;
 
             PhysicsStepResult {
@@ -296,29 +300,26 @@ pub fn compute_desired_velocity(
                 velocity.y = PLAYER_JUMP_FORCE;
             }
 
-            // Calculate friction based on block we're standing on
-            // (Use default friction if not on ground or can't determine block)
+            // Use ground or air friction based on contact state
+            // (Future: could query stepped block for surface-specific friction)
             let friction = if state.on_ground {
-                // Use a reasonable default friction for now
-                // The actual stepped block friction can be queried separately
-                8.0
+                GROUND_FRICTION
             } else {
-                // Less control in the air
-                2.0
+                AIR_FRICTION
             };
 
-            // Smoothly accelerate horizontal velocity towards heading
-            let diff = Vec3::new(
-                heading.x - velocity.x,
+            // Smoothly accelerate horizontal velocity towards target
+            let velocity_diff = Vec3::new(
+                target_velocity_xz.x - velocity.x,
                 0.0,
-                heading.z - velocity.z,
+                target_velocity_xz.z - velocity.z,
             );
 
-            let diff_len = diff.length();
-            if diff_len > 0.0 {
-                let c = (delta_seconds * friction * ACC_MULT / diff_len.max(1.0)).min(1.0);
-                velocity.x += diff.x * c;
-                velocity.z += diff.z * c;
+            let diff_magnitude = velocity_diff.length();
+            if diff_magnitude > 0.0 {
+                let accel_factor = (delta_seconds * friction * GROUND_ACCELERATION / diff_magnitude.max(1.0)).min(1.0);
+                velocity.x += velocity_diff.x * accel_factor;
+                velocity.z += velocity_diff.z * accel_factor;
             }
 
             PhysicsStepResult {
@@ -374,11 +375,11 @@ pub struct Walking;
 
 /// Marker component for flying movement mode
 #[derive(Component)]
-pub struct FreeFly;
+pub struct Flying;
 
 /// Sync movement mode marker components on an entity.
 ///
-/// This helper ensures the `Walking`/`FreeFly` marker components match the
+/// This helper ensures the `Walking`/`Flying` marker components match the
 /// `MovementMode` value. Call this after computing physics to keep ECS state
 /// consistent.
 pub fn sync_movement_mode_components(
@@ -390,9 +391,9 @@ pub fn sync_movement_mode_components(
     let new_is_flying = new_mode == MovementMode::Flying;
     if new_is_flying != was_flying {
         if new_is_flying {
-            commands.entity(entity).remove::<Walking>().insert(FreeFly);
+            commands.entity(entity).remove::<Walking>().insert(Flying);
         } else {
-            commands.entity(entity).remove::<FreeFly>().insert(Walking);
+            commands.entity(entity).remove::<Flying>().insert(Walking);
         }
     }
 }
@@ -467,11 +468,11 @@ mod tests {
         let world = TestWorld;
 
         // Player at y=0 should be on ground (floor at y=-1)
-        let on_ground = check_on_ground(&world, Vec3::new(0.0, 0.0, 0.0), Realm::Overworld, PLAYER_AABB);
+        let on_ground = check_on_ground(&world, Vec3::new(0.0, 0.0, 0.0), Realm::Overworld, PLAYER_QUERY_BOUNDS);
         assert!(on_ground);
 
         // Player at y=5 should not be on ground
-        let on_ground = check_on_ground(&world, Vec3::new(0.0, 5.0, 0.0), Realm::Overworld, PLAYER_AABB);
+        let on_ground = check_on_ground(&world, Vec3::new(0.0, 5.0, 0.0), Realm::Overworld, PLAYER_QUERY_BOUNDS);
         assert!(!on_ground);
     }
 

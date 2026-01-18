@@ -13,7 +13,7 @@
 
 use bevy::prelude::*;
 use shared::messages::ServerToClientPlayerUpdate;
-use shared::physics::{sync_movement_mode_components, FreeFly, LinearVelocity, MovementMode};
+use shared::physics::{sync_movement_mode_components, Flying, LinearVelocity, MovementMode};
 
 use crate::agents::PlayerControlled;
 use crate::network::CurrentPlayerProfile;
@@ -47,7 +47,7 @@ impl Plugin for ReconciliationPlugin {
 pub fn reconcile_player_state(
     mut ev_update: MessageReader<ServerToClientPlayerUpdate>,
     mut player_query: Query<
-        (&mut Transform, &mut LinearVelocity, Option<&FreeFly>),
+        (&mut Transform, &mut LinearVelocity, Option<&Flying>),
         With<PlayerControlled>,
     >,
     mut commands: Commands,
