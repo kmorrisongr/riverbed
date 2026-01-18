@@ -1,9 +1,13 @@
+use avian3d::prelude::Collisions;
 use bevy::prelude::*;
 use bevy_renet::renet::{ClientId, RenetServer};
 use shared::messages::{
     ClientToServerPlayerInput, PlayerId, ServerToClientMessage, ServerToClientPlayerUpdate,
 };
-use shared::physics::{player_step::apply_player_input_step, LinearVelocity, MovementMode, PhysicsState};
+use shared::physics::{
+    is_on_ground_from_contacts, player_step::apply_player_input_step, LinearVelocity, MovementMode,
+    PhysicsState,
+};
 use shared::world::realm::Realm;
 use std::collections::HashMap;
 
@@ -27,6 +31,19 @@ impl Default for ServerPhysicsState {
             movement_mode: MovementMode::Walking,
             on_ground: false,
         }
+    }
+}
+
+/// Updates ServerPhysicsState.on_ground from avian3d collision contacts.
+///
+/// This should run after avian3d's collision detection but before
+/// input handling that depends on ground state.
+pub fn update_server_ground_state(
+    collisions: Collisions,
+    mut query: Query<(Entity, &mut ServerPhysicsState), With<NetworkPlayer>>,
+) {
+    for (entity, mut physics_state) in query.iter_mut() {
+        physics_state.on_ground = is_on_ground_from_contacts(&collisions, entity);
     }
 }
 
@@ -164,7 +181,7 @@ pub fn handle_player_inputs_system(
         // Set velocity - avian3d will integrate and resolve collisions
         linear_velocity.0 = step.velocity.into();
         physics_state.velocity = step.velocity;
-        physics_state.on_ground = step.on_ground;
+        // Note: on_ground is updated by update_server_ground_state from avian3d contacts
         physics_state.movement_mode = step.movement_mode;
 
         player.last_input_processed = ev.input.time_ms;

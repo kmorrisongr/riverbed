@@ -3,8 +3,8 @@ use crate::network::broadcast_world::{
     ChunkBroadcastPlugin, ServerTick, ServerToClientChunkDeliveryTracker,
 };
 use crate::network::players::{
-    broadcast_player_updates_system, handle_player_inputs_system, ClientReportedPredictedPosition,
-    PlayerInputsEvent, PlayerRegistry, ServerPhysicsState,
+    broadcast_player_updates_system, handle_player_inputs_system, update_server_ground_state,
+    ClientReportedPredictedPosition, PlayerInputsEvent, PlayerRegistry, ServerPhysicsState,
 };
 use bevy::log::info;
 use bevy::prelude::*;
@@ -52,7 +52,12 @@ impl Plugin for ServerNetworkPlugin {
         app.add_systems(Update, handle_player_exit);
         app.add_systems(
             Update,
-            (handle_player_inputs_system, broadcast_player_updates_system).chain(),
+            (
+                update_server_ground_state,
+                handle_player_inputs_system,
+                broadcast_player_updates_system,
+            )
+                .chain(),
         );
         app.add_systems(Update, handle_block_interactions);
     }

@@ -11,6 +11,7 @@
 //! velocity computation for prediction.
 
 pub mod avian_physics;
+pub mod ground_detection;
 pub mod player_step;
 
 // Re-export avian3d types for convenience
@@ -26,5 +27,11 @@ pub use avian_physics::{
     PhysicsStepResult, PlayerPhysicsBundle, SharedPhysicsPlugin, Walking, AIR_FRICTION,
     GROUND_ACCELERATION, GROUND_FRICTION, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS,
     PLAYER_GRAVITY, PLAYER_JUMP_FORCE, PLAYER_QUERY_BOUNDS,
+};
+
+// Re-export ground detection from avian3d contacts
+pub use ground_detection::{
+    is_on_ground_from_contacts, update_on_ground_from_collisions, OnGround,
+    GROUND_NORMAL_THRESHOLD,
 };
 
