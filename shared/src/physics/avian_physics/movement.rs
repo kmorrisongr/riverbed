@@ -63,8 +63,8 @@ impl MovementMode {
 /// Input state for a single physics tick.
 #[derive(Debug, Clone, Default)]
 pub struct MovementInput {
-    /// Horizontal movement direction (normalized), relative to camera
-    pub move_direction: Vec3,
+    /// Raw horizontal input axes (not yet normalized), relative to camera
+    pub input_axes: Vec3,
     /// Whether the jump/fly-up input is pressed
     pub jump: bool,
     /// Whether the crouch/fly-down input is pressed
@@ -111,8 +111,8 @@ pub fn compute_desired_velocity(
         Vec3::new(input.camera_right.x, 0.0, input.camera_right.z).normalize_or_zero();
 
     // Transform local movement direction to world space
-    let world_move_dir = if input.move_direction.length_squared() > 0.0 {
-        let local_dir = input.move_direction.normalize();
+    let world_move_dir = if input.input_axes.length_squared() > 0.0 {
+        let local_dir = input.input_axes.normalize();
         forward_horizontal * local_dir.z + right_horizontal * local_dir.x
     } else {
         Vec3::ZERO
@@ -165,8 +165,8 @@ pub fn compute_desired_velocity(
     }
 }
 
-/// Convert transmittable actions to movement input
-pub fn actions_to_movement_input(
+/// Convert transmittable actions to camera-relative movement input.
+pub fn actions_to_camera_relative_input(
     inputs: &HashSet<crate::messages::TransmittableAction>,
     camera_transform: &Transform,
 ) -> MovementInput {
@@ -175,16 +175,16 @@ pub fn actions_to_movement_input(
     let forward = camera_transform.forward().as_vec3();
     let right = camera_transform.right().as_vec3();
 
-    let mut move_direction = Vec3::ZERO;
+    let mut input_axes = Vec3::ZERO;
     let mut jump = false;
     let mut crouch = false;
 
     for action in inputs {
         match action {
-            TransmittableAction::MoveForward => move_direction.z += 1.0,
-            TransmittableAction::MoveBackward => move_direction.z -= 1.0,
-            TransmittableAction::MoveRight => move_direction.x += 1.0,
-            TransmittableAction::MoveLeft => move_direction.x -= 1.0,
+            TransmittableAction::MoveForward => input_axes.z += 1.0,
+            TransmittableAction::MoveBackward => input_axes.z -= 1.0,
+            TransmittableAction::MoveRight => input_axes.x += 1.0,
+            TransmittableAction::MoveLeft => input_axes.x -= 1.0,
             TransmittableAction::JumpOrFlyUp => jump = true,
             TransmittableAction::CrouchOrFlyDown => crouch = true,
             _ => {}
@@ -192,7 +192,7 @@ pub fn actions_to_movement_input(
     }
 
     MovementInput {
-        move_direction,
+        input_axes,
         jump,
         crouch,
         camera_forward: forward,
@@ -201,7 +201,7 @@ pub fn actions_to_movement_input(
 }
 
 /// Apply movement actions (including fly toggle) and compute desired velocity.
-pub fn apply_player_input_step(
+pub fn compute_movement_step_from_actions(
     velocity: Vec3,
     mut movement_mode: MovementMode,
     on_ground: bool,
@@ -224,7 +224,7 @@ pub fn apply_player_input_step(
         }
     }
 
-    let movement_input = actions_to_movement_input(actions, camera);
+    let movement_input = actions_to_camera_relative_input(actions, camera);
 
     let new_velocity = compute_desired_velocity(
         current_velocity,
@@ -245,7 +245,7 @@ pub fn apply_player_input_step(
 ///
 /// This is the primary entry point for movement processing on both client and server.
 /// It computes the desired velocity, updates the ECS components, and returns the result.
-pub fn apply_player_input_to_components(
+pub fn apply_movement_step_to_components(
     linear_velocity: &mut LinearVelocity,
     movement_mode: &mut MovementMode,
     on_ground: bool,
@@ -253,7 +253,7 @@ pub fn apply_player_input_to_components(
     camera: &Transform,
     delta_seconds: f32,
 ) -> MovementStepResult {
-    let step = apply_player_input_step(
+    let step = compute_movement_step_from_actions(
         linear_velocity.0,
         *movement_mode,
         on_ground,
@@ -280,7 +280,7 @@ mod tests {
         let velocity = Vec3::ZERO;
         let mode = MovementMode::Walking;
         let input = MovementInput {
-            move_direction: Vec3::new(0.0, 0.0, 1.0), // Forward
+            input_axes: Vec3::new(0.0, 0.0, 1.0), // Forward
             jump: false,
             crouch: false,
             camera_forward: Vec3::Z,
@@ -298,7 +298,7 @@ mod tests {
         let velocity = Vec3::ZERO;
         let mode = MovementMode::Walking;
         let input = MovementInput {
-            move_direction: Vec3::ZERO,
+            input_axes: Vec3::ZERO,
             jump: true,
             crouch: false,
             camera_forward: Vec3::Z,
@@ -316,7 +316,7 @@ mod tests {
         let velocity = Vec3::ZERO;
         let mode = MovementMode::Flying;
         let input = MovementInput {
-            move_direction: Vec3::ZERO,
+            input_axes: Vec3::ZERO,
             jump: true, // Fly up
             crouch: false,
             camera_forward: Vec3::Z,

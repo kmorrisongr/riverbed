@@ -43,8 +43,9 @@ impl Default for SteppingOn {
     }
 }
 
-/// Get block positions below the player for orientation-agnostic surface queries.
-fn blocks_below(pos: Vec3, realm: Realm, aabb: Vec3) -> impl Iterator<Item = BlockPos> {
+/// Get block positions beneath a capsule-centered player footprint.
+/// Assumes `pos` is the capsule center and uses the provided AABB footprint.
+fn block_positions_beneath_capsule(pos: Vec3, realm: Realm, aabb: Vec3) -> impl Iterator<Item = BlockPos> {
     // Determine Y level just below feet (assuming pos is capsule center)
     let feet_y = pos.y - (PLAYER_CAPSULE_HEIGHT / 2.0 + PLAYER_CAPSULE_RADIUS);
     let y = (feet_y - 0.01).floor() as i32;
@@ -62,7 +63,8 @@ fn blocks_below(pos: Vec3, realm: Realm, aabb: Vec3) -> impl Iterator<Item = Blo
 
 /// Get the block the entity is standing on (for friction/slowing calculations).
 ///
-/// This version is fixed to work with player positions (centered capsule).
+/// Expects the position to be the center of a capsule collider and queries using the
+/// provided AABB footprint around the feet.
 pub fn get_stepped_block<W: BlockAccess>(
     world: &W,
     position: Vec3,
@@ -72,7 +74,7 @@ pub fn get_stepped_block<W: BlockAccess>(
     let mut closest_block = Block::Air;
     let mut min_dist = f32::INFINITY;
 
-    for block_pos in blocks_below(position, realm, aabb) {
+    for block_pos in block_positions_beneath_capsule(position, realm, aabb) {
         let block = world.get_block_safe(block_pos);
         if block.is_traversable() {
             continue;

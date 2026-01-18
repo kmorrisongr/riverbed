@@ -7,7 +7,7 @@
 
 use bevy::prelude::*;
 use shared::physics::{
-    apply_player_input_to_components, update_ground_state_system, update_stepped_block_system,
+    apply_movement_step_to_components, update_ground_state_system, update_stepped_block_system,
     LinearVelocity, MovementMode, OnGround,
 };
 
@@ -17,9 +17,9 @@ use crate::world::ClientWorldMap;
 
 use super::PlayerControlled;
 
-pub struct MovementPlugin;
+pub struct ClientMovementPredictionPlugin;
 
-impl Plugin for MovementPlugin {
+impl Plugin for ClientMovementPredictionPlugin {
     fn build(&self, app: &mut App) {
         // Use shared systems for ground state updates, parameterized by PlayerControlled marker
         app.add_systems(
@@ -45,7 +45,7 @@ pub use shared::physics::SteppingOn;
 
 /// Applies movement input to compute desired velocity.
 ///
-/// This system uses the same `apply_player_input_step` function that the server uses,
+/// This system uses the same `compute_movement_step_from_actions` function that the server uses,
 /// ensuring that client-side prediction produces identical velocity calculations.
 /// Avian3d will then integrate the velocity and resolve collisions.
 fn apply_movement_input(
@@ -70,7 +70,7 @@ fn apply_movement_input(
     let camera_transform = camera_query.single().copied().unwrap_or_default();
 
     let delta_seconds = time.delta_secs();
-    apply_player_input_to_components(
+    apply_movement_step_to_components(
         &mut linear_velocity,
         &mut movement_mode,
         on_ground.0,

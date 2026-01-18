@@ -6,9 +6,9 @@ use bevy::prelude::*;
 use super::PLAYER_GRAVITY;
 
 #[derive(Default)]
-pub struct SharedPhysicsPlugin;
+pub struct AvianSharedPhysicsPlugin;
 
-impl Plugin for SharedPhysicsPlugin {
+impl Plugin for AvianSharedPhysicsPlugin {
     fn build(&self, app: &mut App) {
         // Use full physics plugins for collision detection on both client and server
         app.add_plugins(PhysicsPlugins::default().with_length_unit(1.0));

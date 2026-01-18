@@ -11,9 +11,9 @@ mod plugin;
 
 pub use bundle::PlayerPhysicsBundle;
 pub use movement::{
-    actions_to_movement_input, apply_player_input_step, apply_player_input_to_components,
-    compute_desired_velocity, MovementInput, MovementMode, MovementStepResult, AIR_FRICTION,
-    GROUND_ACCELERATION, GROUND_FRICTION, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS,
-    PLAYER_GRAVITY, PLAYER_JUMP_FORCE, PLAYER_QUERY_BOUNDS,
+    actions_to_camera_relative_input, apply_movement_step_to_components,
+    compute_desired_velocity, compute_movement_step_from_actions, MovementInput, MovementMode,
+    MovementStepResult, AIR_FRICTION, GROUND_ACCELERATION, GROUND_FRICTION, PLAYER_CAPSULE_HEIGHT,
+    PLAYER_CAPSULE_RADIUS, PLAYER_GRAVITY, PLAYER_JUMP_FORCE, PLAYER_QUERY_BOUNDS,
 };
-pub use plugin::SharedPhysicsPlugin;
+pub use plugin::AvianSharedPhysicsPlugin;

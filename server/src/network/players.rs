@@ -3,7 +3,7 @@ use bevy_renet::renet::{ClientId, RenetServer};
 use shared::messages::{
     ClientToServerPlayerInput, PlayerId, ServerToClientMessage, ServerToClientPlayerUpdate,
 };
-use shared::physics::{apply_player_input_to_components, LinearVelocity, MovementMode, OnGround};
+use shared::physics::{apply_movement_step_to_components, LinearVelocity, MovementMode, OnGround};
 use std::collections::HashMap;
 
 use super::dispatcher::NetworkPlayer;
@@ -143,7 +143,7 @@ pub fn handle_player_inputs_system(
         }
 
         let delta_seconds = ev.input.delta_ms as f32 / 1000.0;
-        apply_player_input_to_components(
+        apply_movement_step_to_components(
             &mut linear_velocity,
             &mut movement_mode,
             on_ground.0,

@@ -11,14 +11,14 @@
 //!
 //! The server is the single source of truth for player state:
 //! 1. Client captures inputs and sends to server
-//! 2. Client predicts movement locally using `apply_player_input_to_components()`
+//! 2. Client predicts movement locally using `apply_movement_step_to_components()`
 //! 3. Server processes inputs using the same function for identical velocity calculation
 //! 4. Server broadcasts authoritative position updates
 //! 5. Client reconciles prediction with server state (see `client::network::reconciliation`)
 //!
 //! # Key Functions
 //!
-//! - [`apply_player_input_to_components`]: Applies input to ECS components (used by both client & server)
+//! - [`apply_movement_step_to_components`]: Applies input to ECS components (used by both client & server)
 //! - [`compute_desired_velocity`]: Pure function for velocity calculation
 //! - [`update_ground_state_system`]: Generic system for ground detection via avian3d contacts
 //! - [`update_stepped_block_system`]: Generic system for detecting which block player stands on
@@ -34,10 +34,11 @@ pub use avian3d::prelude::{
 
 // Re-export core physics types and functions from the avian integration
 pub use avian_physics::{
-    actions_to_movement_input, apply_player_input_step, apply_player_input_to_components,
-    compute_desired_velocity, MovementInput, MovementMode, MovementStepResult, PlayerPhysicsBundle,
-    SharedPhysicsPlugin, AIR_FRICTION, GROUND_ACCELERATION, GROUND_FRICTION, PLAYER_CAPSULE_HEIGHT,
-    PLAYER_CAPSULE_RADIUS, PLAYER_GRAVITY, PLAYER_JUMP_FORCE, PLAYER_QUERY_BOUNDS,
+    actions_to_camera_relative_input, apply_movement_step_to_components,
+    compute_desired_velocity, compute_movement_step_from_actions, MovementInput, MovementMode,
+    MovementStepResult, PlayerPhysicsBundle, AvianSharedPhysicsPlugin, AIR_FRICTION,
+    GROUND_ACCELERATION, GROUND_FRICTION, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS,
+    PLAYER_GRAVITY, PLAYER_JUMP_FORCE, PLAYER_QUERY_BOUNDS,
 };
 
 // Re-export ground detection from avian3d contacts

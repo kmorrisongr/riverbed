@@ -46,7 +46,7 @@ impl ChunkColliderBundle {
     ///
     /// Returns `None` if the chunk has no solid geometry (all air).
     pub fn new(chunk: &Chunk, chunk_pos: ChunkPos) -> Option<Self> {
-        let collider = generate_chunk_collider(chunk)?;
+        let collider = generate_chunk_trimesh_collider(chunk)?;
 
         // Calculate world position of chunk origin
         let world_pos = Vec3::new(
@@ -65,13 +65,13 @@ impl ChunkColliderBundle {
     }
 }
 
-/// Generate a trimesh collider from chunk geometry.
+/// Generate a chunk trimesh collider from voxel geometry.
 ///
 /// This extracts the surface quads from the chunk using greedy meshing,
 /// then converts them to triangles for the physics collider.
 ///
 /// Returns `None` if the chunk has no solid geometry.
-pub fn generate_chunk_collider(chunk: &Chunk) -> Option<Collider> {
+pub fn generate_chunk_trimesh_collider(chunk: &Chunk) -> Option<Collider> {
     let quads = extract_quads(chunk, 1);
 
     if quads.is_empty() {
@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn test_empty_chunk_no_collider() {
         let chunk = Chunk::new();
-        let collider = generate_chunk_collider(&chunk);
+        let collider = generate_chunk_trimesh_collider(&chunk);
         assert!(collider.is_none());
     }
 
@@ -204,7 +204,7 @@ mod tests {
         let mut chunk = Chunk::new();
         chunk.set((1, 1, 1), Block::Granite);
 
-        let collider = generate_chunk_collider(&chunk);
+        let collider = generate_chunk_trimesh_collider(&chunk);
         assert!(collider.is_some());
     }
 

@@ -15,7 +15,7 @@ use bevy_renet::renet::RenetServer;
 use bevy_renet::RenetServerPlugin;
 use crossbeam::channel;
 use shared::meshing::ChunkColliderPlugin;
-use shared::physics::SharedPhysicsPlugin;
+use shared::physics::AvianSharedPhysicsPlugin;
 use shared::world::pos::pos3d::ChunkPos;
 use shared::world::world_rng::WorldRng;
 use shared::world::WorldSeed;
@@ -131,7 +131,7 @@ pub fn configure_server_app(
     app.add_plugins(NetcodeServerPlugin);
 
     // Physics plugin for collision detection
-    app.add_plugins(SharedPhysicsPlugin);
+    app.add_plugins(AvianSharedPhysicsPlugin);
 
     // Chunk collider plugin for physics
     app.add_plugins(ChunkColliderPlugin::<VoxelWorld>::default());
