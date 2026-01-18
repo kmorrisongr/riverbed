@@ -3,10 +3,10 @@ use crate::network::broadcast_world::{
     ChunkBroadcastPlugin, ServerTick, ServerToClientChunkDeliveryTracker,
 };
 use crate::network::players::{
-    broadcast_player_updates_system, handle_player_inputs_system, update_server_ground_state,
-    update_server_stepped_block, ClientReportedPredictedPosition, PlayerInputsEvent,
-    PlayerRegistry, ServerPhysicsState,
+    broadcast_player_updates_system, handle_player_inputs_system,
+    ClientReportedPredictedPosition, PlayerInputsEvent, PlayerRegistry,
 };
+use crate::world::voxel_world::VoxelWorld;
 use bevy::log::info;
 use bevy::prelude::*;
 use bevy_renet::renet::{ClientId, RenetServer, ServerEvent};
@@ -15,7 +15,10 @@ use shared::messages::{
     ServerToClientMessage, ServerToClientPlayerSpawn,
 };
 use shared::net::clock;
-use shared::physics::{MovementMode, OnGround, PlayerPhysicsBundle, SteppingOn};
+use shared::physics::{
+    update_ground_state_system, update_stepped_block_system, MovementMode, OnGround,
+    PlayerPhysicsBundle, SteppingOn,
+};
 use shared::world::realm::Realm;
 use shared::world::WorldSeed;
 use shared::GameServerConfig;
@@ -54,8 +57,8 @@ impl Plugin for ServerNetworkPlugin {
         app.add_systems(
             Update,
             (
-                update_server_ground_state,
-                update_server_stepped_block,
+                update_ground_state_system::<NetworkPlayer>,
+                update_stepped_block_system::<NetworkPlayer, VoxelWorld>,
                 handle_player_inputs_system,
                 broadcast_player_updates_system,
             )
@@ -177,7 +180,7 @@ fn handle_auth_requests(
     mut chunk_tracker: ResMut<ServerToClientChunkDeliveryTracker>,
     tick: Res<ServerTick>,
     world_seed: Res<WorldSeed>,
-    existing_players: Query<(&NetworkPlayer, &Transform, Option<&ServerPhysicsState>)>,
+    existing_players: Query<(&NetworkPlayer, &Transform, &MovementMode)>,
 ) {
     use crate::network::players::DEFAULT_SPAWN_POSITION;
 
@@ -220,7 +223,7 @@ fn handle_auth_requests(
             Transform::from_translation(spawn_position),
             Realm::Overworld,
             NetworkPlayer { client_id },
-            ServerPhysicsState::default(),
+            MovementMode::default(),
             ClientReportedPredictedPosition(spawn_position),
             PlayerPhysicsBundle::new(),
             OnGround::default(),
@@ -242,10 +245,8 @@ fn handle_auth_requests(
                 existing_players
                     .iter()
                     .find(|(np, _, _)| np.client_id == player.id)
-                    .map(|(_, transform, physics)| {
-                        let is_flying = physics
-                            .map(|p| p.movement_mode == MovementMode::Flying)
-                            .unwrap_or(false);
+                    .map(|(_, transform, movement_mode)| {
+                        let is_flying = *movement_mode == MovementMode::Flying;
                         (transform.translation, transform.rotation, is_flying)
                     })
                     .unwrap_or((DEFAULT_SPAWN_POSITION, Quat::IDENTITY, false))

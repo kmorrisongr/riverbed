@@ -3,11 +3,17 @@
 //! This module provides components and systems for ground state tracking:
 //! - `OnGround`: Whether an entity is standing on a surface (from avian3d contacts)
 //! - `SteppingOn`: Which block type the entity is standing on (for surface effects)
+//!
+//! The generic systems `update_ground_state_system` and `update_stepped_block_system`
+//! can be used by both client and server with their respective marker components.
 
 use avian3d::prelude::Collisions;
 use bevy::prelude::*;
 
 use crate::block::Block;
+use crate::physics::{get_stepped_block, PLAYER_QUERY_BOUNDS};
+use crate::world::block_access::BlockAccess;
+use crate::world::realm::Realm;
 
 /// Minimum Y component of contact normal to count as "ground".
 /// 0.7 corresponds to approximately a 45-degree slope.
@@ -70,6 +76,51 @@ pub fn is_on_ground_from_contacts(collisions: &Collisions, entity: Entity) -> bo
         }
     }
     false
+}
+
+// =============================================================================
+// Generic Systems for Ground State Updates
+// =============================================================================
+// These systems can be used by both client and server by specifying the
+// appropriate marker component (e.g., PlayerControlled on client, NetworkPlayer
+// on server).
+// =============================================================================
+
+/// Generic system that updates OnGround component from avian3d collision contacts.
+///
+/// This system queries all entities with the given marker component `M` and
+/// updates their `OnGround` state based on collision contacts. Should run
+/// before movement input processing so jump detection uses current frame's state.
+///
+/// # Type Parameters
+/// - `M`: Marker component to filter which entities to update (e.g., `PlayerControlled`)
+pub fn update_ground_state_system<M: Component>(
+    collisions: Collisions,
+    mut query: Query<(Entity, &mut OnGround), With<M>>,
+) {
+    for (entity, mut on_ground) in query.iter_mut() {
+        on_ground.0 = is_on_ground_from_contacts(&collisions, entity);
+    }
+}
+
+/// Generic system that updates SteppingOn component by querying the voxel world.
+///
+/// This system queries all entities with the given marker component `M` and
+/// updates their `SteppingOn` block type by checking the voxel world directly.
+/// Used for footstep sounds and surface-specific effects.
+///
+/// # Type Parameters
+/// - `M`: Marker component to filter which entities to update
+/// - `W`: World resource that implements `BlockAccess` (e.g., `ClientWorldMap`, `VoxelWorld`)
+pub fn update_stepped_block_system<M: Component, W: BlockAccess + Resource>(
+    world: Option<Res<W>>,
+    mut query: Query<(&Transform, &Realm, &mut SteppingOn), With<M>>,
+) {
+    let Some(world) = world else { return };
+    
+    for (transform, realm, mut stepping_on) in query.iter_mut() {
+        stepping_on.0 = get_stepped_block(&*world, transform.translation, *realm, PLAYER_QUERY_BOUNDS);
+    }
 }
 
 #[cfg(test)]

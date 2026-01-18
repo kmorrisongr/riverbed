@@ -13,7 +13,7 @@
 
 use bevy::prelude::*;
 use shared::messages::ServerToClientPlayerUpdate;
-use shared::physics::{sync_movement_mode_components, Flying, LinearVelocity, MovementMode};
+use shared::physics::{LinearVelocity, MovementMode};
 
 use crate::agents::PlayerControlled;
 use crate::network::CurrentPlayerProfile;
@@ -47,11 +47,9 @@ impl Plugin for ReconciliationPlugin {
 pub fn reconcile_player_state(
     mut ev_update: MessageReader<ServerToClientPlayerUpdate>,
     mut player_query: Query<
-        (&mut Transform, &mut LinearVelocity, Option<&Flying>),
+        (&mut Transform, &mut LinearVelocity, &mut MovementMode),
         With<PlayerControlled>,
     >,
-    mut commands: Commands,
-    player_entity: Query<Entity, With<PlayerControlled>>,
     current_player: Res<CurrentPlayerProfile>,
     mut input_history: ResMut<InputHistory>,
 ) {
@@ -72,23 +70,16 @@ pub fn reconcile_player_state(
             );
         }
 
-        let Ok((mut transform, mut linear_velocity, free_fly_opt)) = player_query.single_mut()
+        let Ok((mut transform, mut linear_velocity, mut movement_mode)) = player_query.single_mut()
         else {
             warn!("No local player entity found for reconciliation");
             continue;
         };
 
-        let Ok(entity) = player_entity.single() else {
-            continue;
-        };
-
         // Update movement mode if it differs
-        let server_is_flying = event.movement_mode == MovementMode::Flying;
-        let client_is_flying = free_fly_opt.is_some();
-
-        if server_is_flying != client_is_flying {
-            sync_movement_mode_components(&mut commands, entity, event.movement_mode, client_is_flying);
-            info!("Movement mode corrected: flying={}", server_is_flying);
+        if event.movement_mode != *movement_mode {
+            info!("Movement mode corrected: {:?} -> {:?}", *movement_mode, event.movement_mode);
+            *movement_mode = event.movement_mode;
         }
 
         // Calculate position error

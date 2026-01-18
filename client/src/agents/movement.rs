@@ -5,12 +5,10 @@
 //! set it on the player's LinearVelocity, and avian3d resolves collisions
 //! against chunk trimesh colliders.
 
-use avian3d::prelude::Collisions;
 use bevy::prelude::*;
 use shared::physics::{
-    get_stepped_block, is_on_ground_from_contacts, player_step::apply_player_input_step,
-    sync_movement_mode_components, Flying, LinearVelocity, MovementMode, OnGround, PhysicsState,
-    PLAYER_QUERY_BOUNDS,
+    player_step::apply_player_input_step, update_ground_state_system,
+    update_stepped_block_system, LinearVelocity, MovementMode, OnGround, PhysicsState,
 };
 use shared::world::realm::Realm;
 
@@ -24,12 +22,19 @@ pub struct MovementPlugin;
 
 impl Plugin for MovementPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreUpdate, update_stepped_block)
-            // Update ground state from avian3d contacts before movement
-            .add_systems(
-                Update,
-                (update_ground_state, apply_movement_input).chain(),
-            );
+        // Use shared systems for ground state updates, parameterized by PlayerControlled marker
+        app.add_systems(
+            PreUpdate,
+            update_stepped_block_system::<PlayerControlled, ClientWorldMap>,
+        )
+        .add_systems(
+            Update,
+            (
+                update_ground_state_system::<PlayerControlled>,
+                apply_movement_input,
+            )
+                .chain(),
+        );
     }
 }
 
@@ -37,31 +42,7 @@ impl Plugin for MovementPlugin {
 pub struct Crouching(pub bool);
 
 // Re-export shared physics components for other client modules
-pub use shared::physics::{SteppingOn, Walking};
-
-/// Updates the SteppingOn component to track what block the player is standing on.
-/// This is used for footstep sounds and other effects.
-fn update_stepped_block(
-    world: Res<ClientWorldMap>,
-    mut query: Query<(&Transform, &Realm, &mut SteppingOn)>,
-) {
-    for (transform, realm, mut stepping_on) in query.iter_mut() {
-        stepping_on.0 = get_stepped_block(&*world, transform.translation, *realm, PLAYER_QUERY_BOUNDS);
-    }
-}
-
-/// Updates the OnGround component from avian3d collision contacts.
-///
-/// This runs before movement input processing so that jump detection
-/// uses the current frame's collision state.
-fn update_ground_state(
-    collisions: Collisions,
-    mut query: Query<(Entity, &mut OnGround), With<PlayerControlled>>,
-) {
-    for (entity, mut on_ground) in query.iter_mut() {
-        on_ground.0 = is_on_ground_from_contacts(&collisions, entity);
-    }
-}
+pub use shared::physics::SteppingOn;
 
 /// Applies movement input to compute desired velocity.
 ///
@@ -69,23 +50,21 @@ fn update_ground_state(
 /// ensuring that client-side prediction produces identical velocity calculations.
 /// Avian3d will then integrate the velocity and resolve collisions.
 fn apply_movement_input(
-    mut commands: Commands,
     time: Res<Time>,
     frame_inputs: Res<CurrentFrameInputs>,
     camera_query: Query<&Transform, With<FpsCam>>,
     mut player_query: Query<
         (
-            Entity,
             &Transform,
             &mut LinearVelocity,
             &Realm,
-            Option<&Flying>,
+            &mut MovementMode,
             &OnGround,
         ),
         (With<PlayerControlled>, Without<FpsCam>),
     >,
 ) {
-    let Ok((entity, transform, mut linear_velocity, realm, free_fly_opt, on_ground)) =
+    let Ok((transform, mut linear_velocity, realm, mut movement_mode, on_ground)) =
         player_query.single_mut()
     else {
         return;
@@ -99,18 +78,10 @@ fn apply_movement_input(
     // Get camera transform for movement orientation
     let camera_transform = camera_query.single().copied().unwrap_or_default();
 
-    // Build current physics state
-    let was_flying = free_fly_opt.is_some();
-    let current_mode = if was_flying {
-        MovementMode::Flying
-    } else {
-        MovementMode::Walking
-    };
-
     let state = PhysicsState::from_components(
         transform.translation,
         Vec3::from(linear_velocity.0),
-        current_mode,
+        *movement_mode,
         *realm,
         on_ground.0,
     );
@@ -127,6 +98,8 @@ fn apply_movement_input(
     // Set velocity - avian3d will integrate and resolve collisions
     linear_velocity.0 = step.velocity.into();
 
-    // Sync movement mode ECS components if changed
-    sync_movement_mode_components(&mut commands, entity, step.movement_mode, was_flying);
+    // Update movement mode if changed
+    if step.movement_mode != *movement_mode {
+        *movement_mode = step.movement_mode;
+    }
 }

@@ -1,67 +1,26 @@
-use avian3d::prelude::Collisions;
 use bevy::prelude::*;
 use bevy_renet::renet::{ClientId, RenetServer};
 use shared::messages::{
     ClientToServerPlayerInput, PlayerId, ServerToClientMessage, ServerToClientPlayerUpdate,
 };
 use shared::physics::{
-    get_stepped_block, is_on_ground_from_contacts, player_step::apply_player_input_step,
-    LinearVelocity, MovementMode, OnGround, PhysicsState, SteppingOn, PLAYER_QUERY_BOUNDS,
+    player_step::apply_player_input_step, LinearVelocity, MovementMode, OnGround, PhysicsState,
 };
 use shared::world::realm::Realm;
 use std::collections::HashMap;
 
 use super::dispatcher::NetworkPlayer;
 use super::extensions::SendGameMessageExtension;
-use crate::world::voxel_world::VoxelWorld;
 
 // Re-export from shared for backward compatibility
 pub use shared::DEFAULT_SPAWN_POSITION;
 
-/// Server-side physics state tracking for networked players.
-/// Note: Ground detection uses the shared `OnGround` component.
-#[derive(Component, Debug, Clone)]
-pub struct ServerPhysicsState {
-    pub velocity: Vec3,
-    pub movement_mode: MovementMode,
-}
-
-impl Default for ServerPhysicsState {
-    fn default() -> Self {
-        Self {
-            velocity: Vec3::ZERO,
-            movement_mode: MovementMode::Walking,
-        }
-    }
-}
-
-/// Updates OnGround component from avian3d collision contacts for server players.
-///
-/// This should run after avian3d's collision detection but before
-/// input handling that depends on ground state.
-pub fn update_server_ground_state(
-    collisions: Collisions,
-    mut query: Query<(Entity, &mut OnGround), With<NetworkPlayer>>,
-) {
-    for (entity, mut on_ground) in query.iter_mut() {
-        on_ground.0 = is_on_ground_from_contacts(&collisions, entity);
-    }
-}
-
-/// Updates SteppingOn component to track what block players are standing on.
-///
-/// This is used for surface-specific friction and effects. The server tracks
-/// this authoritatively so that physics calculations use consistent surface data.
-pub fn update_server_stepped_block(
-    world: Option<Res<VoxelWorld>>,
-    mut query: Query<(&Transform, &Realm, &mut SteppingOn), With<NetworkPlayer>>,
-) {
-    let Some(world) = world else { return };
-    
-    for (transform, realm, mut stepping_on) in query.iter_mut() {
-        stepping_on.0 = get_stepped_block(&*world, transform.translation, *realm, PLAYER_QUERY_BOUNDS);
-    }
-}
+// =============================================================================
+// Note: Ground state and stepped block updates now use shared systems from
+// shared::physics::ground_detection. See dispatcher.rs for system registration:
+// - update_ground_state_system::<NetworkPlayer>
+// - update_stepped_block_system::<NetworkPlayer, VoxelWorld>
+// =============================================================================
 
 #[derive(Component, Debug, Clone, Default)]
 pub struct ClientReportedPredictedPosition(pub Vec3);
@@ -134,6 +93,9 @@ pub struct PlayerInputsEvent {
 /// This system receives player inputs from clients, computes desired velocity,
 /// and sets it on the player's LinearVelocity component. Avian3d will then
 /// integrate the velocity and resolve collisions against chunk colliders.
+///
+/// Note: MovementMode is stored directly as a component, and velocity is
+/// stored in LinearVelocity (no separate ServerPhysicsState needed).
 pub fn handle_player_inputs_system(
     mut events: MessageReader<PlayerInputsEvent>,
     mut registry: ResMut<PlayerRegistry>,
@@ -141,7 +103,7 @@ pub fn handle_player_inputs_system(
         &NetworkPlayer,
         &Transform,
         &mut LinearVelocity,
-        &mut ServerPhysicsState,
+        &mut MovementMode,
         &mut ClientReportedPredictedPosition,
         &Realm,
         &OnGround,
@@ -161,7 +123,7 @@ pub fn handle_player_inputs_system(
             continue;
         }
 
-        let Some((_, transform, mut linear_velocity, mut physics_state, mut predicted_pos, realm, on_ground)) = player_query
+        let Some((_, transform, mut linear_velocity, mut movement_mode, mut predicted_pos, realm, on_ground)) = player_query
             .iter_mut()
             .find(|(np, _, _, _, _, _, _)| np.client_id == ev.client_id)
         else {
@@ -183,7 +145,7 @@ pub fn handle_player_inputs_system(
         let state = PhysicsState::from_components(
             transform.translation,
             Vec3::from(linear_velocity.0),
-            physics_state.movement_mode,
+            *movement_mode,
             *realm,
             on_ground.0,
         );
@@ -197,8 +159,11 @@ pub fn handle_player_inputs_system(
 
         // Set velocity - avian3d will integrate and resolve collisions
         linear_velocity.0 = step.velocity.into();
-        physics_state.velocity = step.velocity;
-        physics_state.movement_mode = step.movement_mode;
+        
+        // Update movement mode if changed
+        if step.movement_mode != *movement_mode {
+            *movement_mode = step.movement_mode;
+        }
 
         player.last_input_processed = ev.input.time_ms;
     }
@@ -207,15 +172,15 @@ pub fn handle_player_inputs_system(
 pub fn broadcast_player_updates_system(
     registry: Res<PlayerRegistry>,
     mut server: ResMut<RenetServer>,
-    player_query: Query<(&NetworkPlayer, &Transform, &ServerPhysicsState)>,
+    player_query: Query<(&NetworkPlayer, &Transform, &LinearVelocity, &MovementMode)>,
 ) {
     // Only broadcast authenticated players
     for player in registry.players.values().filter(|p| p.is_authenticated) {
-        // Get position, orientation, and physics state from ECS
+        // Get position, orientation, velocity, and movement mode from ECS components
         let (position, orientation, velocity, movement_mode) = player_query
             .iter()
-            .find(|(np, _, _)| np.client_id == player.id)
-            .map(|(_, t, ps)| (t.translation, t.rotation, ps.velocity, ps.movement_mode))
+            .find(|(np, _, _, _)| np.client_id == player.id)
+            .map(|(_, t, lv, mm)| (t.translation, t.rotation, Vec3::from(lv.0), *mm))
             .unwrap_or((
                 DEFAULT_SPAWN_POSITION,
                 Quat::IDENTITY,

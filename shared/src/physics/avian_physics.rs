@@ -35,8 +35,11 @@ pub const GROUND_FRICTION: f32 = 8.0;
 /// Friction coefficient when in air (lower = less air control)
 pub const AIR_FRICTION: f32 = 2.0;
 
-/// Represents the movement mode of an entity
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+/// Represents the movement mode of an entity.
+///
+/// This is now used directly as a component on player entities, replacing
+/// the previous `Walking`/`Flying` marker components.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum MovementMode {
     #[default]
     Walking,
@@ -377,22 +380,32 @@ pub fn actions_to_movement_input(
 }
 
 // =============================================================================
-// Movement Mode Marker Components
+// Movement Mode Marker Components (Deprecated)
+// =============================================================================
+// These marker components are deprecated in favor of using `MovementMode`
+// directly as a component. They are kept temporarily for backward compatibility
+// during migration but should be removed once all code uses `MovementMode`.
 // =============================================================================
 
-/// Marker component for walking movement mode
+/// Marker component for walking movement mode.
+/// 
+/// **Deprecated**: Use `MovementMode::Walking` component instead.
 #[derive(Component)]
+#[deprecated(note = "Use MovementMode component directly")]
 pub struct Walking;
 
-/// Marker component for flying movement mode
+/// Marker component for flying movement mode.
+/// 
+/// **Deprecated**: Use `MovementMode::Flying` component instead.
 #[derive(Component)]
+#[deprecated(note = "Use MovementMode component directly")]
 pub struct Flying;
 
 /// Sync movement mode marker components on an entity.
 ///
-/// This helper ensures the `Walking`/`Flying` marker components match the
-/// `MovementMode` value. Call this after computing physics to keep ECS state
-/// consistent.
+/// **Deprecated**: This function syncs the old marker components. New code
+/// should use `MovementMode` as a component directly and mutate it.
+#[deprecated(note = "Use MovementMode component directly")]
 pub fn sync_movement_mode_components(
     commands: &mut Commands,
     entity: Entity,
