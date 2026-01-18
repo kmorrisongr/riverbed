@@ -75,7 +75,7 @@ pub fn update_frame_inputs_system(
 
     if let Ok((player_transform, linear_velocity)) = player.single() {
         frame_inputs.0.predicted_position = player_transform.translation;
-        frame_inputs.0.predicted_velocity = Vec3::from(linear_velocity.0);
+        frame_inputs.0.predicted_velocity = linear_velocity.0;
     }
 
     frame_inputs.0.hotbar_slot = selected_slot.0 as u32;

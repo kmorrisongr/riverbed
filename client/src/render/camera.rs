@@ -120,7 +120,7 @@ fn adaptative_fov(
         let speed = transform
             .rotation
             .mul_vec3(-Vec3::Z)
-            .dot(Vec3::from(linear_velocity.0));
+            .dot(linear_velocity.0);
         let target_fov = FRAC_PI_4 * (speed / 10.0).clamp(1.0, 2.0);
         projection.fov = projection.fov.lerp(target_fov, time.delta_secs() * 4.0);
     }

@@ -85,7 +85,7 @@ impl ClientChunk {
                 }
 
                 let vertices = face.vertices_packed(
-                    quad.xyz as u32,
+                    quad.xyz,
                     quad.width as u32,
                     quad.height as u32,
                     lod as u32,

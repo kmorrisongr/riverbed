@@ -34,7 +34,7 @@ fn footsteps(
     mut steppers_query: Query<(&Transform, &LinearVelocity, &SteppingOn, &mut FootstepCD)>,
 ) {
     for (transform, linear_velocity, stepping_on, mut footstep_cd) in steppers_query.iter_mut() {
-        let speed = Vec3::from(linear_velocity.0).length();
+        let speed = linear_velocity.0.length();
         if speed == 0. {
             continue;
         }

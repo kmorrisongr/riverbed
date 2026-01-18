@@ -53,7 +53,7 @@ impl ChunkColliderBundle {
             chunk_collider: ChunkCollider { chunk_pos },
             collider,
             rigid_body: RigidBody::Static,
-            position: Position(world_pos.into()),
+            position: Position(world_pos),
             rotation: Rotation::default(),
         })
     }

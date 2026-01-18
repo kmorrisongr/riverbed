@@ -162,7 +162,7 @@ pub fn broadcast_player_updates_system(
         let (position, orientation, velocity, movement_mode) = player_query
             .iter()
             .find(|(np, _, _, _)| np.client_id == player.id)
-            .map(|(_, t, lv, mm)| (t.translation, t.rotation, Vec3::from(lv.0), *mm))
+            .map(|(_, t, lv, mm)| (t.translation, t.rotation, lv.0, *mm))
             .unwrap_or((
                 DEFAULT_SPAWN_POSITION,
                 Quat::IDENTITY,

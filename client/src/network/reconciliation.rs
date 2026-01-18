@@ -91,7 +91,7 @@ pub fn reconcile_player_state(
         if position_error < POSITION_ERROR_IGNORE_THRESHOLD_METERS {
             // Prediction is accurate - no position correction needed
             // Just sync velocity to keep future predictions accurate
-            linear_velocity.0 = event.velocity.into();
+            linear_velocity.0 = event.velocity;
             continue;
         }
 
@@ -102,7 +102,7 @@ pub fn reconcile_player_state(
                 position_error
             );
             transform.translation = event.position;
-            linear_velocity.0 = event.velocity.into();
+            linear_velocity.0 = event.velocity;
         } else {
             // Small error - smoothly correct toward server position
             debug!(
@@ -112,7 +112,7 @@ pub fn reconcile_player_state(
             transform.translation = transform
                 .translation
                 .lerp(event.position, CORRECTION_LERP_FACTOR);
-            linear_velocity.0 = event.velocity.into();
+            linear_velocity.0 = event.velocity;
         }
     }
 }

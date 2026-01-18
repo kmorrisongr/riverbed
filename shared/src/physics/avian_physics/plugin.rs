@@ -14,6 +14,6 @@ impl Plugin for SharedPhysicsPlugin {
         app.add_plugins(PhysicsPlugins::default().with_length_unit(1.0));
 
         // Configure gravity for the world
-        app.insert_resource(Gravity(Vec3::new(0.0, -PLAYER_GRAVITY, 0.0).into()));
+        app.insert_resource(Gravity(Vec3::new(0.0, -PLAYER_GRAVITY, 0.0)));
     }
 }

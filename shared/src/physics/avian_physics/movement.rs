@@ -227,7 +227,7 @@ pub fn apply_player_input_to_components(
     delta_seconds: f32,
 ) -> PlayerStepOutput {
     let step = apply_player_input_step(
-        Vec3::from(linear_velocity.0),
+        linear_velocity.0,
         *movement_mode,
         on_ground,
         actions,
@@ -236,7 +236,7 @@ pub fn apply_player_input_to_components(
     );
 
     // Write outputs back to components for simulation
-    linear_velocity.0 = step.velocity.into();
+    linear_velocity.0 = step.velocity;
     if step.movement_mode != *movement_mode {
         *movement_mode = step.movement_mode;
     }
