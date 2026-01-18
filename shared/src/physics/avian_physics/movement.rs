@@ -22,7 +22,9 @@ pub const GROUND_FRICTION: f32 = 8.0;
 pub const AIR_FRICTION: f32 = 2.0;
 
 /// Represents the movement mode of an entity.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Component, Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
+)]
 pub enum MovementMode {
     #[default]
     Walking,
@@ -112,7 +114,11 @@ pub fn compute_desired_velocity(
             }
 
             // Use ground or air friction based on contact state
-            let friction = if on_ground { GROUND_FRICTION } else { AIR_FRICTION };
+            let friction = if on_ground {
+                GROUND_FRICTION
+            } else {
+                AIR_FRICTION
+            };
 
             // Smoothly accelerate horizontal velocity towards target
             let velocity_diff = Vec3::new(
@@ -125,7 +131,7 @@ pub fn compute_desired_velocity(
             if diff_magnitude > 0.0 {
                 let accel_factor = (delta_seconds * friction * GROUND_ACCELERATION
                     / diff_magnitude.max(1.0))
-                    .min(1.0);
+                .min(1.0);
                 velocity.x += velocity_diff.x * accel_factor;
                 velocity.z += velocity_diff.z * accel_factor;
             }

@@ -38,9 +38,11 @@ pub fn update_world_from_network(
                             if mesh_sender.0.send(chunk_position).is_err() {
                                 warn!("Failed to send mesh order for chunk {:?}", chunk_position);
                             }
-                            
+
                             // Notify the collider system to generate a collider for this chunk
-                            ev_collider_update.write(ChunkColliderUpdate { chunk_pos: chunk_position });
+                            ev_collider_update.write(ChunkColliderUpdate {
+                                chunk_pos: chunk_position,
+                            });
                         }
 
                         debug!("Received and processed {} chunks from server", chunk_count);

@@ -169,15 +169,13 @@ fn face_quad_vertices(face: Face, x: f32, y: f32, z: f32, w: f32, h: f32) -> [Ve
 fn face_triangle_indices(face: Face, base: u32) -> ([u32; 3], [u32; 3]) {
     match face {
         // Outward-facing normals (counter-clockwise when viewed from outside)
-        Face::Right | Face::Up | Face::Front => (
-            [base, base + 1, base + 2],
-            [base + 2, base + 1, base + 3],
-        ),
+        Face::Right | Face::Up | Face::Front => {
+            ([base, base + 1, base + 2], [base + 2, base + 1, base + 3])
+        }
         // Inward-facing normals need opposite winding
-        Face::Left | Face::Down | Face::Back => (
-            [base, base + 2, base + 1],
-            [base + 2, base + 3, base + 1],
-        ),
+        Face::Left | Face::Down | Face::Back => {
+            ([base, base + 2, base + 1], [base + 2, base + 3, base + 1])
+        }
     }
 }
 

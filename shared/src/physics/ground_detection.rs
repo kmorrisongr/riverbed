@@ -11,7 +11,7 @@ use avian3d::prelude::Collisions;
 use bevy::prelude::*;
 
 use crate::block::Block;
-use crate::physics::{PLAYER_QUERY_BOUNDS, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS};
+use crate::physics::{PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS, PLAYER_QUERY_BOUNDS};
 use crate::world::block_access::BlockAccess;
 use crate::world::pos::pos3d::BlockPos;
 use crate::world::realm::Realm;
@@ -165,9 +165,10 @@ pub fn update_stepped_block_system<M: Component, W: BlockAccess + Resource>(
     mut query: Query<(&Transform, &Realm, &mut SteppingOn), With<M>>,
 ) {
     let Some(world) = world else { return };
-    
+
     for (transform, realm, mut stepping_on) in query.iter_mut() {
-        stepping_on.0 = get_stepped_block(&*world, transform.translation, *realm, PLAYER_QUERY_BOUNDS);
+        stepping_on.0 =
+            get_stepped_block(&*world, transform.translation, *realm, PLAYER_QUERY_BOUNDS);
     }
 }
 

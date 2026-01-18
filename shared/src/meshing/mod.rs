@@ -12,8 +12,7 @@ pub mod chunk_collider;
 pub mod collider_sync;
 mod greedy;
 
-pub use greedy::{extract_quads, ChunkQuads, QuadData};
 pub use collider_sync::{
-    ChunkColliderPlugin, ChunkColliderUpdate, ChunkProvider,
-    ChunkColliderEntities,
+    ChunkColliderEntities, ChunkColliderPlugin, ChunkColliderUpdate, ChunkProvider,
 };
+pub use greedy::{extract_quads, ChunkQuads, QuadData};

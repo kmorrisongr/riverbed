@@ -78,7 +78,10 @@ pub fn reconcile_player_state(
 
         // Update movement mode if it differs
         if event.movement_mode != *movement_mode {
-            info!("Movement mode corrected: {:?} -> {:?}", *movement_mode, event.movement_mode);
+            info!(
+                "Movement mode corrected: {:?} -> {:?}",
+                *movement_mode, event.movement_mode
+            );
             *movement_mode = event.movement_mode;
         }
 

@@ -30,7 +30,7 @@ pub const Y_CHUNKS: usize = MAX_HEIGHT / CHUNK_S1;
 pub struct WorldSeed(pub u32);
 
 /// Event sent when a column (vertical stack of chunks) is unloaded.
-/// 
+///
 /// Used by both client and server to notify systems that need to clean up
 /// resources associated with a column (e.g., mesh entities, colliders, block entities).
 #[derive(Message, Debug, Clone, Copy)]

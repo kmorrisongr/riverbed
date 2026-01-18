@@ -3,8 +3,8 @@ use crate::network::broadcast_world::{
     ChunkBroadcastPlugin, ServerTick, ServerToClientChunkDeliveryTracker,
 };
 use crate::network::players::{
-    broadcast_player_updates_system, handle_player_inputs_system,
-    ClientReportedPredictedPosition, PlayerInputsEvent, PlayerRegistry,
+    broadcast_player_updates_system, handle_player_inputs_system, ClientReportedPredictedPosition,
+    PlayerInputsEvent, PlayerRegistry,
 };
 use crate::world::voxel_world::VoxelWorld;
 use bevy::log::info;

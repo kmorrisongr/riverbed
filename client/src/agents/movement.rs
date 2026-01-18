@@ -7,8 +7,8 @@
 
 use bevy::prelude::*;
 use shared::physics::{
-    apply_player_input_to_components, update_ground_state_system,
-    update_stepped_block_system, LinearVelocity, MovementMode, OnGround,
+    apply_player_input_to_components, update_ground_state_system, update_stepped_block_system,
+    LinearVelocity, MovementMode, OnGround,
 };
 
 use crate::network::buffered_client::CurrentFrameInputs;
@@ -53,17 +53,11 @@ fn apply_movement_input(
     frame_inputs: Res<CurrentFrameInputs>,
     camera_query: Query<&Transform, With<FpsCam>>,
     mut player_query: Query<
-        (
-            &mut LinearVelocity,
-            &mut MovementMode,
-            &OnGround,
-        ),
+        (&mut LinearVelocity, &mut MovementMode, &OnGround),
         (With<PlayerControlled>, Without<FpsCam>),
     >,
 ) {
-    let Ok((mut linear_velocity, mut movement_mode, on_ground)) =
-        player_query.single_mut()
-    else {
+    let Ok((mut linear_velocity, mut movement_mode, on_ground)) = player_query.single_mut() else {
         return;
     };
 

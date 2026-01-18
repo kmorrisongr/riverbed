@@ -117,7 +117,10 @@ fn adaptative_fov(
     let (transform, mut perspective) = cam_query.into_inner();
     // Adjust the FOV based on the player's speed
     if let Projection::Perspective(projection) = &mut *perspective {
-        let speed = transform.rotation.mul_vec3(-Vec3::Z).dot(Vec3::from(linear_velocity.0));
+        let speed = transform
+            .rotation
+            .mul_vec3(-Vec3::Z)
+            .dot(Vec3::from(linear_velocity.0));
         let target_fov = FRAC_PI_4 * (speed / 10.0).clamp(1.0, 2.0);
         projection.fov = projection.fov.lerp(target_fov, time.delta_secs() * 4.0);
     }

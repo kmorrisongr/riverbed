@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy_renet::renet::{ClientId, RenetServer};
 use crossbeam::channel::Receiver;
-use shared::messages::{ServerToClientMessage, ServerToClientWorldUpdate};
 use shared::meshing::ChunkColliderUpdate;
+use shared::messages::{ServerToClientMessage, ServerToClientWorldUpdate};
 use shared::net::clock;
 use shared::world::chunk::Chunk;
 use shared::world::pos::pos2d::{chunks_in_col, ColPos};
@@ -67,7 +67,9 @@ pub fn process_chunk_changes(
     while let Ok(chunk_position) = chunk_changes.0.try_recv() {
         tracker.invalidate_chunk(&chunk_position);
         // Also notify the collider system to rebuild this chunk's collider
-        collider_events.write(ChunkColliderUpdate { chunk_pos: chunk_position });
+        collider_events.write(ChunkColliderUpdate {
+            chunk_pos: chunk_position,
+        });
     }
 }
 

@@ -65,7 +65,12 @@ pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
             ItemHolder::Inventory(inventory),
             PlayerControlled,
         ))
-        .insert((MovementMode::default(), SteppingOn(Block::Air), Crouching(false), OnGround::default()))
+        .insert((
+            MovementMode::default(),
+            SteppingOn(Block::Air),
+            Crouching(false),
+            OnGround::default(),
+        ))
         .insert(SpatialListener::new(0.3))
         .insert((FootstepCD(0.), BlockSoundCD(0.)))
         .insert(InputMap::new([

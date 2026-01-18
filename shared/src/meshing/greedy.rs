@@ -92,14 +92,13 @@ pub fn extract_quads(chunk: &Chunk, lod: usize) -> ChunkQuads {
     let mut mesher: bgm::Mesher<CHUNK_S1> = bgm::Mesher::new();
 
     // Build set of transparent block indices for the mesher
-    let transparents =
-        BTreeSet::from_iter(palette.iter().enumerate().filter_map(|(i, block)| {
-            if i != 0 && !block.is_opaque() {
-                Some(i as u16)
-            } else {
-                None
-            }
-        }));
+    let transparents = BTreeSet::from_iter(palette.iter().enumerate().filter_map(|(i, block)| {
+        if i != 0 && !block.is_opaque() {
+            Some(i as u16)
+        } else {
+            None
+        }
+    }));
 
     mesher.mesh(&voxels, &transparents);
 

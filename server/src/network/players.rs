@@ -3,9 +3,7 @@ use bevy_renet::renet::{ClientId, RenetServer};
 use shared::messages::{
     ClientToServerPlayerInput, PlayerId, ServerToClientMessage, ServerToClientPlayerUpdate,
 };
-use shared::physics::{
-    apply_player_input_to_components, LinearVelocity, MovementMode, OnGround,
-};
+use shared::physics::{apply_player_input_to_components, LinearVelocity, MovementMode, OnGround};
 use std::collections::HashMap;
 
 use super::dispatcher::NetworkPlayer;
@@ -120,9 +118,10 @@ pub fn handle_player_inputs_system(
             continue;
         }
 
-        let Some((_, mut linear_velocity, mut movement_mode, mut predicted_pos, on_ground)) = player_query
-            .iter_mut()
-            .find(|(np, _, _, _, _)| np.client_id == ev.client_id)
+        let Some((_, mut linear_velocity, mut movement_mode, mut predicted_pos, on_ground)) =
+            player_query
+                .iter_mut()
+                .find(|(np, _, _, _, _)| np.client_id == ev.client_id)
         else {
             warn!(
                 "No ECS entity found for authenticated player {}",

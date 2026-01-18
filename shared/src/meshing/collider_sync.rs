@@ -8,9 +8,9 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 
+use crate::world::chunk::Chunk;
 use crate::world::pos::pos2d::chunks_in_col;
 use crate::world::pos::pos3d::ChunkPos;
-use crate::world::chunk::Chunk;
 use crate::world::ColUnloadEvent;
 
 use super::chunk_collider::ChunkColliderBundle;
@@ -40,21 +40,23 @@ pub fn update_chunk_colliders<P: ChunkProvider + Resource>(
     chunk_provider: Option<Res<P>>,
     mut collider_entities: ResMut<ChunkColliderEntities>,
 ) {
-    let Some(chunk_provider) = chunk_provider else { return };
-    
+    let Some(chunk_provider) = chunk_provider else {
+        return;
+    };
+
     for event in events.read() {
         let chunk_pos = event.chunk_pos;
-        
+
         // Remove existing collider entity if present
         if let Some(old_entity) = collider_entities.entities.remove(&chunk_pos) {
             commands.entity(old_entity).despawn();
         }
-        
+
         // Get the chunk data
         let Some(chunk) = chunk_provider.get_chunk(chunk_pos) else {
             continue;
         };
-        
+
         // Create new collider bundle
         if let Some(bundle) = ChunkColliderBundle::new(&chunk, chunk_pos) {
             let entity = commands.spawn(bundle).id();
@@ -79,11 +81,11 @@ pub fn remove_column_colliders(
 }
 
 /// Plugin that manages chunk colliders.
-/// 
+///
 /// This plugin sets up the systems needed to automatically maintain chunk
 /// colliders as the world changes. It requires the physics plugin to be
 /// added separately.
-/// 
+///
 /// Note: This plugin does NOT register `ColUnloadEvent` - the caller must
 /// ensure it's registered (typically via their world plugin) since it's
 /// a shared event used by multiple systems.
