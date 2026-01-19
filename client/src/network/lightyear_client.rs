@@ -1,6 +1,3 @@
-//! Lightyear client networking: configures the client plugin stack, spawns a
-//! netcode-backed connection, handles character replication and input sync.
-
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
@@ -33,7 +30,6 @@ use crate::ui::SelectedHotbarSlot as UiSelectedHotbarSlot;
 
 const LIGHTYEAR_DEV_PRIVATE_KEY: [u8; PRIVATE_KEY_BYTES] = [0; PRIVATE_KEY_BYTES];
 
-/// Networking settings for the Lightyear path on the client.
 #[derive(Resource, Debug, Clone)]
 pub struct LightyearClientConfig {
     pub server_addr: SocketAddr,
@@ -63,7 +59,6 @@ impl Default for LightyearClientConfig {
     }
 }
 
-/// Latest input we intend to feed into a Lightyear input timeline.
 #[derive(Resource, Default, Debug, Clone)]
 pub struct LightyearInputSnapshot {
     pub action_mask: ActionMask,
@@ -74,32 +69,24 @@ pub struct LightyearClientPlugin;
 
 impl Plugin for LightyearClientPlugin {
     fn build(&self, app: &mut App) {
-        // Ensure core plugins Lightyear expects are present (most come from DefaultPlugins already).
         if !app.is_plugin_added::<TransformPlugin>() {
             app.add_plugins(TransformPlugin);
         }
 
-        // Core Lightyear client stack + our protocol.
         app.add_plugins(ClientPlugins {
             tick_duration: Duration::from_secs_f64(1.0 / TICKS_PER_SECOND as f64),
         });
         app.add_plugins(LightyearProtocolPlugin);
 
-        // Physics integration with lightyear (handles rollback, Position<->Transform sync).
         app.add_plugins(shared::net::LightyearPhysicsPlugin);
 
-        // Resources and systems shared with gameplay.
         app.init_resource::<LightyearClientConfig>()
             .init_resource::<LightyearInputSnapshot>()
             .add_systems(Startup, spawn_lightyear_client)
             .add_systems(PreUpdate, capture_lightyear_inputs)
-            // Handle newly predicted characters (replicated from server).
             .add_systems(Update, handle_new_character)
-            // Sync camera orientation from FpsCam to the replicated component.
             .add_systems(Update, sync_camera_orientation)
-            // Sync selected hotbar slot to the replicated component.
             .add_systems(Update, sync_selected_hotbar_slot)
-            // Apply character actions to predicted entities during FixedUpdate.
             .add_systems(FixedUpdate, handle_character_actions);
     }
 }
@@ -112,7 +99,6 @@ fn spawn_lightyear_client(
     player_profile: Option<Res<CurrentPlayerProfile>>,
     existing: Query<Entity, With<NetcodeClient>>,
 ) {
-    // Only create one Lightyear client instance.
     if !existing.is_empty() {
         return;
     }
@@ -179,9 +165,6 @@ fn capture_lightyear_inputs(
     snapshot.camera = camera_transform;
 }
 
-/// Add physics bundle and input map to newly predicted characters.
-/// For controlled (local) characters, we add an InputMap so leafwing captures inputs.
-/// For remote characters, we just add the physics bundle for prediction.
 fn handle_new_character(
     mut commands: Commands,
     character_query: Query<(Entity, Has<Controlled>), (Added<Predicted>, With<CharacterMarker>)>,
@@ -192,46 +175,30 @@ fn handle_new_character(
             commands
                 .entity(entity)
                 .insert((
-                    // Use configured input map (loaded from key_bindings.toml).
                     configured_input_map(),
                     ActionState::<PlayerInputAction>::default(),
-                    // Mark as locally controlled player.
                     PlayerControlled,
-                    // Add CameraOrientation so we can replicate it to the server.
                     CameraOrientation::default(),
-                    // Add SelectedHotbarSlot so we can replicate it to the server.
                     SelectedHotbarSlot::default(),
-                    // TargetBlock is needed for block interaction (raycast result).
                     TargetBlock(None),
-                    // Crouching state for movement.
                     Crouching(false),
-                    // Visibility for rendering.
                     Visibility::default(),
                 ))
-                // Sound effect cooldowns.
                 .insert((FootstepCD(0.), BlockSoundCD(0.)))
-                // Spatial audio listener.
                 .insert(SpatialListener::new(0.3))
-                // Observer for item pickup sounds.
                 .observe(on_item_get);
         } else {
             info!("Remote character predicted for us: {entity:?}");
-            // Remote characters just need visibility for rendering.
             commands.entity(entity).insert(Visibility::default());
         }
 
         info!(?entity, "Adding physics bundle to character");
-        // Add physics components for prediction/simulation.
-        // The server sends Position/Rotation/LinearVelocity, but we need the
-        // full physics bundle for local simulation.
         commands
             .entity(entity)
             .insert((DynamicPlayerPhysicsBundle::default(), Realm::Overworld));
     }
 }
 
-/// Sync camera orientation from FpsCam to the CameraOrientation component
-/// on the controlled character entity. This gets replicated to the server.
 fn sync_camera_orientation(
     camera_query: Query<&FpsCam>,
     mut character_query: Query<&mut CameraOrientation, (With<Controlled>, With<CharacterMarker>)>,
@@ -247,9 +214,6 @@ fn sync_camera_orientation(
     cam_orientation.pitch = fps_cam.pitch;
 }
 
-/// Sync the selected hotbar slot from the UI resource to the replicated component
-/// on the controlled character entity. This gets replicated to the server for
-/// validating block placement/consumption.
 fn sync_selected_hotbar_slot(
     ui_slot: Option<Res<UiSelectedHotbarSlot>>,
     mut character_query: Query<&mut SelectedHotbarSlot, (With<Controlled>, With<CharacterMarker>)>,
@@ -267,9 +231,6 @@ fn sync_selected_hotbar_slot(
     }
 }
 
-/// Apply character actions to predicted entities.
-/// Lightyear ensures the ActionState contains the correct inputs for the current tick,
-/// whether we're in normal simulation or during rollback.
 fn handle_character_actions(
     time: Res<Time>,
     camera_query: Query<&FpsCam>,
@@ -285,7 +246,6 @@ fn handle_character_actions(
         With<Predicted>,
     >,
 ) {
-    // Get camera transform for local player's movement orientation.
     let local_camera = camera_query.single().ok();
     let delta_seconds = time.delta_secs();
 
@@ -298,11 +258,8 @@ fn handle_character_actions(
         grounded,
     ) in &mut player_query
     {
-        // Convert leafwing action state to our ActionMask for the existing physics system.
         let action_mask = action_mask_from_leafwing(action_state);
 
-        // For controlled (local) character, use FpsCam directly for responsiveness.
-        // For remote characters, use the replicated CameraOrientation.
         let camera_transform = if is_controlled {
             local_camera
                 .map(|cam| {

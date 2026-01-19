@@ -1,9 +1,3 @@
-//! Network setup resources and systems for the client.
-//!
-//! This module provides:
-//! - Resources for identifying the current player and target server
-//! - System to launch a local embedded server when not connecting to external
-
 use bevy::prelude::*;
 use rand::Rng;
 use shared::messages::PlayerId;
@@ -12,7 +6,6 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::thread;
 use std::time::Duration;
 
-/// Resource tracking which world to load/connect to.
 #[derive(Resource, Debug, Clone)]
 pub struct SelectedWorld {
     pub name: Option<String>,
@@ -26,7 +19,6 @@ impl Default for SelectedWorld {
     }
 }
 
-/// Current player's profile (only the id is currently used for netcode auth).
 #[derive(Resource, Clone)]
 pub struct CurrentPlayerProfile {
     pub id: PlayerId,
@@ -47,13 +39,11 @@ impl FromWorld for CurrentPlayerProfile {
     }
 }
 
-/// Target server configuration.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct TargetServer {
     pub address: Option<SocketAddr>,
 }
 
-/// Startup system to launch a local embedded server if no external server address is set.
 pub fn launch_local_server_system(
     mut target: ResMut<TargetServer>,
     selected_world: Res<SelectedWorld>,

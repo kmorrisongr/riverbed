@@ -1,9 +1,3 @@
-//! Server-side block interaction handling via Lightyear.
-//!
-//! This module receives block change requests from clients, validates them
-//! (checking distance, authentication, etc.), applies them to the VoxelWorld,
-//! and broadcasts confirmed changes back to all clients.
-
 use bevy::prelude::*;
 use lightyear::prelude::server::*;
 use lightyear::prelude::*;
@@ -15,10 +9,8 @@ use shared::world::BlockAccess;
 
 use crate::world::voxel_world::VoxelWorld;
 
-/// Maximum distance (in blocks) a player can interact with.
 const MAX_INTERACTION_DISTANCE: f32 = 10.0;
 
-/// Plugin that sets up block interaction handling via Lightyear.
 pub struct BlockInteractionsPlugin;
 
 impl Plugin for BlockInteractionsPlugin {
@@ -27,13 +19,6 @@ impl Plugin for BlockInteractionsPlugin {
     }
 }
 
-/// Handle incoming block interaction requests from clients.
-///
-/// This system:
-/// 1. Reads BlockInteractionRequest messages from connected clients
-/// 2. Validates the request (distance check, bounds check)
-/// 3. Applies valid changes to the VoxelWorld
-/// 4. Broadcasts BlockChangeConfirm to all clients
 fn handle_block_interactions(
     mut client_query: Query<
         (
@@ -59,7 +44,6 @@ fn handle_block_interactions(
     };
 
     for (client_entity, remote_id, mut receiver) in &mut client_query {
-        // Find this client's character to get their position
         let player_position = character_query
             .iter()
             .find(|(_, controlled_by)| controlled_by.owner == client_entity)
@@ -69,7 +53,6 @@ fn handle_block_interactions(
             let block_position = request.position;
             let new_block = request.new_block;
 
-            // Validate: player must have a character entity
             let Some(player_pos) = player_position else {
                 warn!(
                     "Block interaction from client {:?} with no character entity",
@@ -78,7 +61,6 @@ fn handle_block_interactions(
                 continue;
             };
 
-            // Validate: distance check
             let block_center = Vec3::new(
                 block_position.x as f32 + 0.5,
                 block_position.y as f32 + 0.5,
@@ -94,17 +76,14 @@ fn handle_block_interactions(
                 continue;
             }
 
-            // Get the old block before changing
             let old_block = world.get_block_safe(block_position);
 
-            // Apply the change to the server's world
             if world.set_block_safe(block_position, new_block) {
                 debug!(
                     "Client {:?} set block at {:?} to {:?}",
                     remote_id, block_position, new_block
                 );
 
-                // Broadcast the confirmed change to all clients
                 let confirm = BlockChangeConfirm {
                     position: block_position,
                     old_block,

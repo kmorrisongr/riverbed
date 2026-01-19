@@ -4,10 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::messages::{ActionMask, TransmittableAction};
 
-/// Player input actions expressed for leafwing + lightyear pipelines.
-/// We keep the surface area aligned with the existing `TransmittableAction`
-/// bits so current movement/block interactions can be driven from a single
-/// source of truth.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Reflect, Serialize, Deserialize)]
 pub enum PlayerInputAction {
     Move,
@@ -34,26 +30,19 @@ impl Actionlike for PlayerInputAction {
 impl PlayerInputAction {
     pub fn default_input_map() -> InputMap<PlayerInputAction> {
         InputMap::default()
-            // Movement on WASD + left stick
             .with_dual_axis(Self::Move, VirtualDPad::wasd())
             .with_dual_axis(Self::Move, GamepadStick::LEFT)
-            // Jump / crouch
             .with(Self::Jump, KeyCode::Space)
             .with(Self::Jump, GamepadButton::South)
             .with(Self::Crouch, KeyCode::ShiftLeft)
             .with(Self::Crouch, GamepadButton::East)
-            // Toggle fly
             .with(Self::ToggleFly, KeyCode::F1)
             .with(Self::ToggleFly, GamepadButton::West)
-            // Interactions
             .with(Self::Hit, MouseButton::Left)
             .with(Self::Modify, MouseButton::Right)
     }
 }
 
-/// Convert a leafwing action state to our existing `ActionMask` bitfield.
-/// This lets the current gameplay logic keep operating while we migrate
-/// transport to lightyear.
 pub fn action_mask_from_leafwing(state: &ActionState<PlayerInputAction>) -> ActionMask {
     const AXIS_DEADZONE: f32 = 0.15;
 
