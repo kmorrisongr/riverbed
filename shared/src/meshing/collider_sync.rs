@@ -8,6 +8,7 @@
 use bevy::prelude::*;
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender, TrySendError};
 use std::collections::{HashMap, HashSet};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::thread::Builder;
 use std::sync::Arc;
 
@@ -92,9 +93,20 @@ fn setup_collider_worker(mut commands: Commands) {
             .name(format!("collider-worker-{i}"))
             .spawn(move || {
                 while let Ok(job) = job_receiver.recv() {
-                    let bundle = generate_chunk_trimesh_collider(&job.chunk).map(|collider| {
-                        StaticChunkColliderBundle::from_collider(collider, job.chunk_pos)
-                    });
+                    // Catch panics during collider cooking to avoid killing the worker thread.
+                    let cooked = catch_unwind(AssertUnwindSafe(|| {
+                        generate_chunk_trimesh_collider(&job.chunk).map(|collider| {
+                            StaticChunkColliderBundle::from_collider(collider, job.chunk_pos)
+                        })
+                    }));
+
+                    let bundle = match cooked {
+                        Ok(bundle) => bundle,
+                        Err(_) => {
+                            warn!("Collider cook panicked for chunk {:?}; clearing in-flight", job.chunk_pos);
+                            None
+                        }
+                    };
 
                     if result_sender
                         .send(ChunkColliderResult {

@@ -11,6 +11,7 @@ use shared::world::pos::pos2d::ColPos;
 use shared::world::pos::pos3d::ChunkPos;
 use shared::world::pos::PlayerCol;
 use std::collections::HashSet;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 use std::thread::yield_now;
 
@@ -72,11 +73,23 @@ pub fn setup_mesh_thread(
                 let Some(chunk) = chunks.get(&chunk_pos) else {
                     continue;
                 };
-                let face_meshes =
+
+                // Catch meshing panics so the worker thread stays alive.
+                let meshed = catch_unwind(AssertUnwindSafe(|| {
                     chunk
                         .value()
                         .read()
-                        .create_face_meshes(&texture_map, lod, chunk_pos);
+                        .create_face_meshes(&texture_map, lod, chunk_pos)
+                }));
+
+                let face_meshes = match meshed {
+                    Ok(meshes) => meshes,
+                    Err(_) => {
+                        warn!("Mesh generation panicked for chunk {:?}; skipping", chunk_pos);
+                        continue;
+                    }
+                };
+
                 trace!("{}", LogData::ChunkMeshed(chunk_pos));
                 for (i, face_mesh) in face_meshes.into_iter().enumerate() {
                     let face = i.into();
