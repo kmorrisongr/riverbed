@@ -6,11 +6,15 @@ pub mod models;
 pub mod reconciliation;
 mod setup;
 mod world;
+#[cfg(feature = "lightyear-net")]
+pub mod lightyear_client;
 pub use cleanup::*;
 pub use extensions::SendGameMessageExtension;
 pub use inputs::*;
 pub use reconciliation::ServerAuthorityReconciliationPlugin;
 pub use setup::*;
+#[cfg(feature = "lightyear-net")]
+pub use lightyear_client::LightyearClientPlugin;
 
 use bevy::prelude::*;
 use shared::logging::logging::LogEvent;
