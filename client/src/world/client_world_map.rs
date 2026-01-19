@@ -53,11 +53,6 @@ impl ClientWorldMap {
         }
     }
 
-    pub fn insert_chunk(&self, chunk_pos: ChunkPos, chunk: Chunk) {
-        self.chunks.insert(chunk_pos, RwLock::new(Arc::new(chunk)));
-        let _ = self.chunk_changes.send(chunk_pos);
-    }
-
     pub fn get_chunk_arc(&self, pos: ChunkPos) -> Option<Arc<Chunk>> {
         self.chunks
             .get(&pos)

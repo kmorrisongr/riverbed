@@ -30,16 +30,9 @@ pub const DEFAULT_SPAWN_POSITION: Vec3 = Vec3::new(280., 500., -150.);
 // Re-export only the most commonly referenced query bounds for convenience
 pub use physics::PLAYER_QUERY_BOUNDS;
 
-// Error message constants
+// Error message constants (only retain ones still used by the Lightyear path)
 pub const UNIX_EPOCH_TIME_ERROR: &str = "System time is before UNIX_EPOCH";
-pub const SOCKET_LOCAL_ADDR_ERROR: &str = "Failed to retrieve local address for UDP socket";
 pub const SOCKET_BIND_ERROR: &str = "Failed to bind UDP socket";
-pub const TARGET_SERVER_ADDR_ERROR: &str =
-    "Target server address missing when initializing connection";
-pub const NETCODE_CLIENT_TRANSPORT_ERROR: &str = "Failed to create Netcode client transport";
-pub const NETCODE_SERVER_TRANSPORT_ERROR: &str = "Failed to create Netcode server transport";
-pub const USERNAME_MISSING_AUTHENTICATED_ERROR: &str =
-    "Username missing while handling authenticated session token";
 
 #[derive(Resource)]
 pub struct GameServerConfig {

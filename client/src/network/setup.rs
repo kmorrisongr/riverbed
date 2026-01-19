@@ -26,21 +26,17 @@ impl Default for SelectedWorld {
     }
 }
 
-/// Current player's profile (ID and name).
+/// Current player's profile (only the id is currently used for netcode auth).
 #[derive(Resource, Clone)]
 pub struct CurrentPlayerProfile {
     pub id: PlayerId,
-    pub name: String,
 }
 
 impl CurrentPlayerProfile {
     pub(crate) fn new() -> Self {
         let mut rng = rand::rng();
         let id: u64 = rng.random();
-        Self {
-            id,
-            name: format!("Player-{id}"),
-        }
+        Self { id }
     }
 }
 
@@ -55,7 +51,6 @@ impl FromWorld for CurrentPlayerProfile {
 #[derive(Resource, Debug, Clone, Default)]
 pub struct TargetServer {
     pub address: Option<SocketAddr>,
-    pub username: Option<String>,
 }
 
 /// Startup system to launch a local embedded server if no external server address is set.
