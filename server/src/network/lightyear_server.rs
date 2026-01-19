@@ -26,6 +26,7 @@ use shared::world::realm::Realm;
 use shared::{DEFAULT_SPAWN_POSITION, PROTOCOL_ID, TICKS_PER_SECOND};
 
 use crate::network::block_interactions::BlockInteractionsPlugin;
+use crate::network::chunk_streaming::ChunkStreamingPlayer;
 
 const SEND_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -182,6 +183,10 @@ fn handle_connected(
             CharacterMarker,
             PlayerColor(color.into()),
             Realm::Overworld,
+            // Track this character for chunk streaming - use client_id as u64 for renet
+            ChunkStreamingPlayer {
+                client_id: client_id.to_bits(),
+            },
         ))
         .id();
 

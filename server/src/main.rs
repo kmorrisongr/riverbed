@@ -9,6 +9,7 @@ use shared::{GameServerConfig, RENDER_DISTANCE};
 mod generation;
 mod init;
 mod logging;
+mod network;
 pub mod world;
 
 #[derive(Parser, Debug)]

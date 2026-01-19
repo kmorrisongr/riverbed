@@ -47,6 +47,12 @@ impl ClientWorldMap {
         }
     }
 
+    /// Insert a chunk received from the server into the world map.
+    pub fn insert_chunk(&self, chunk_pos: ChunkPos, chunk: Chunk) {
+        self.chunks.insert(chunk_pos, RwLock::new(Arc::new(chunk)));
+        let _ = self.chunk_changes.send(chunk_pos);
+    }
+
     pub fn get_block(&self, pos: BlockPos) -> Block {
         let (chunk_pos, chunked_pos) = <(ChunkPos, _)>::from(pos);
         match self.chunks.get(&chunk_pos) {

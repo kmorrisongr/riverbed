@@ -17,6 +17,8 @@ use shared::world::WorldSeed;
 use shared::{GameServerConfig, TICKS_PER_SECOND};
 
 use crate::logging::make_log_channel;
+use crate::network::chunk_streaming::{ChunkChangesReceiver, ChunkStreamingPlugin};
+use crate::network::renet_chunk_server::RenetChunkServerPlugin;
 use crate::world::voxel_world::VoxelWorld;
 use crate::world::TerrainLoadPlugin;
 
@@ -36,7 +38,7 @@ pub fn configure_server_app(app: &mut App, config: ServerInitConfig) {
     let seed: u64 = 42; // TODO: Load from world save or generate randomly
 
     // Create chunk changes channel for VoxelWorld
-    let (chunk_changes_tx, _chunk_changes_rx) = channel::unbounded::<ChunkPos>();
+    let (chunk_changes_tx, chunk_changes_rx) = channel::unbounded::<ChunkPos>();
     let mut voxel_world = VoxelWorld::new(chunk_changes_tx);
     voxel_world.render_distance = config.game_config.broadcast_render_distance as u32;
 
@@ -69,8 +71,13 @@ pub fn configure_server_app(app: &mut App, config: ServerInitConfig) {
     // Insert game resources
     app.insert_resource(config.game_config);
     app.insert_resource(voxel_world);
+    app.insert_resource(ChunkChangesReceiver(chunk_changes_rx));
     app.insert_resource(WorldSeed(seed as u32));
     app.insert_resource(WorldRng::new(seed));
+
+    // Add chunk streaming via renet
+    app.add_plugins(RenetChunkServerPlugin);
+    app.add_plugins(ChunkStreamingPlugin);
 
     // Add terrain loading plugin (handles terrain generation based on player positions)
     app.add_plugins(TerrainLoadPlugin);
