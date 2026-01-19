@@ -55,14 +55,14 @@ pub struct ColliderCookJobSender(pub Sender<ColliderCookJob>);
 #[derive(Resource)]
 pub struct ColliderCookResultReceiver(pub Receiver<ColliderCookResult>);
 
-struct ColliderCookJob {
+pub struct ColliderCookJob {
     chunk_pos: ChunkPos,
     chunk: Arc<Chunk>,
     lod: usize,
     version: u64,
 }
 
-struct ColliderCookResult {
+pub struct ColliderCookResult {
     chunk_pos: ChunkPos,
     bundle: Option<StaticChunkColliderBundle>,
     version: u64,
