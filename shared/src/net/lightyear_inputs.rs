@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::messages::{ActionMask, TransmittableAction};
 
@@ -7,7 +8,7 @@ use crate::messages::{ActionMask, TransmittableAction};
 /// We keep the surface area aligned with the existing `TransmittableAction`
 /// bits so current movement/block interactions can be driven from a single
 /// source of truth.
-#[derive(Actionlike, Clone, Copy, PartialEq, Eq, Hash, Debug, Reflect)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Reflect, Serialize, Deserialize)]
 pub enum PlayerInputAction {
     Move,
     Jump,
@@ -15,6 +16,19 @@ pub enum PlayerInputAction {
     ToggleFly,
     Hit,
     Modify,
+}
+
+impl Actionlike for PlayerInputAction {
+    fn input_control_kind(&self) -> InputControlKind {
+        match self {
+            Self::Move => InputControlKind::DualAxis,
+            Self::Jump => InputControlKind::Button,
+            Self::Crouch => InputControlKind::Button,
+            Self::ToggleFly => InputControlKind::Button,
+            Self::Hit => InputControlKind::Button,
+            Self::Modify => InputControlKind::Button,
+        }
+    }
 }
 
 impl PlayerInputAction {

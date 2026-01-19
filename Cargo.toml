@@ -20,7 +20,7 @@ hashbrown = "*"
 itertools = "*"
 json5 = "*"
 leafwing-input-manager = "0.19"
-lightyear = { version = "0.25", features = ["avian3d", "crossbeam", "leafwing"] }
+lightyear = { version = "0.25", features = ["avian3d", "crossbeam", "leafwing", "netcode", "udp", "client", "server"] }
 packed-uints = "*"
 parking_lot = "*"
 rand = "0.9"

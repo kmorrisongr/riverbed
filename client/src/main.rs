@@ -114,10 +114,11 @@ fn client(args: Args) {
         .add_plugins(TextureLoadPlugin)
         .add_plugins(UIPlugin)
         .add_plugins(ClientSideMovementPredictionPlugin)
-        #[cfg(feature = "lightyear-net")]
-        .add_plugins(LightyearClientPlugin)
         .add_plugins(Render)
         .add_plugins(SoundPlugin);
+
+    #[cfg(feature = "lightyear-net")]
+    app.add_plugins(LightyearClientPlugin);
 
     app.run();
 }

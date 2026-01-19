@@ -6842,6 +6842,7 @@ dependencies = [
  "crossbeam-skiplist",
  "csv",
  "itertools 0.14.0",
+ "leafwing-input-manager",
  "lightyear",
  "packed-uints",
  "parking_lot",

@@ -4,7 +4,7 @@ use super::{
     GameUiState, UIAction,
 };
 use crate::{
-    agents::{Action, PlayerControlled, HOTBAR_SLOTS},
+    agents::{PlayerControlled, HOTBAR_SLOTS},
     sounds::ItemGet,
 };
 use bevy::{color::palettes::css, prelude::*};
@@ -13,6 +13,7 @@ use shared::items::{
     item_slots::ItemHolder, new_inventory, parse_recipes, CraftEntry, InventoryRecipes,
     InventoryTrait, Item, Recipe, Stack,
 };
+use shared::net::lightyear_inputs::PlayerInputAction;
 use std::fs;
 
 pub struct CraftMenuPlugin;
@@ -244,12 +245,12 @@ fn craft_action(
     selected_recipe: Res<SelectedRecipe>,
     craft_menu_query: Query<&CraftingMenu>,
     mut hotbar_query: Query<(Entity, &mut ItemHolder), With<PlayerControlled>>,
-    action_query: Query<&ActionState<Action>>,
+    action_query: Query<&ActionState<PlayerInputAction>>,
 ) {
     let Ok(action_state) = action_query.single() else {
         return;
     };
-    if !action_state.just_pressed(&Action::Hit) {
+    if !action_state.just_pressed(&PlayerInputAction::Hit) {
         return;
     }
     let Ok(craft_menu) = craft_menu_query.single() else {
