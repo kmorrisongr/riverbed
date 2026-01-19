@@ -9,10 +9,8 @@ use binary_greedy_meshing as bgm;
 use shared::{
     block::{Block, Face},
     meshing::extract_quads,
-    world::{pos::pos3d::ChunkPos, CHUNK_S1, WATER_H},
+    world::{chunk::Chunk, pos::pos3d::ChunkPos, CHUNK_S1, WATER_H},
 };
-
-use crate::network::models::client_chunk::ClientChunk;
 
 use super::texture_array::TextureMapTrait;
 
@@ -36,26 +34,25 @@ fn color(r: f32, g: f32, b: f32) -> u32 {
     ((r * 63.) as u32) << 11 | ((g * 63.) as u32) << 5 | (b * 31.) as u32
 }
 
-impl ClientChunk {
-    /// Create render meshes for each face of the chunk.
-    ///
-    /// This uses the shared greedy meshing code to extract quads, then converts
-    /// them to bevy render meshes with the appropriate vertex attributes.
-    ///
-    /// Doesn't work with lod > 2, because chunks are of size 62 (to get to 64 with padding) and 62 = 2*31
-    /// TODO: make it work with lod > 2 if necessary (by truncating quads)
-    pub fn create_face_meshes(
-        &self,
-        texture_map: impl TextureMapTrait,
-        lod: usize,
-        chunk_pos: ChunkPos,
-    ) -> [Option<Mesh>; 6] {
-        let cy = chunk_pos.y as usize * CHUNK_S1;
+/// Create render meshes for each face of the chunk.
+///
+/// This uses the shared greedy meshing code to extract quads, then converts
+/// them to bevy render meshes with the appropriate vertex attributes.
+///
+/// Doesn't work with lod > 2, because chunks are of size 62 (to get to 64 with padding) and 62 = 2*31
+/// TODO: make it work with lod > 2 if necessary (by truncating quads)
+pub fn create_face_meshes(
+    chunk: &Chunk,
+    texture_map: impl TextureMapTrait,
+    lod: usize,
+    chunk_pos: ChunkPos,
+) -> [Option<Mesh>; 6] {
+    let cy = chunk_pos.y as usize * CHUNK_S1;
 
-        // Use shared greedy meshing to extract quads
-        let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
-        let chunk_quads = extract_quads(self.inner(), lod);
-        mesh_data_span.exit();
+    // Use shared greedy meshing to extract quads
+    let mesh_data_span = info_span!("mesh voxel data", name = "mesh voxel data").entered();
+    let chunk_quads = extract_quads(chunk, lod);
+    mesh_data_span.exit();
 
         let mesh_build_span = info_span!("mesh build", name = "mesh build").entered();
         let mut meshes = core::array::from_fn(|_| None);
@@ -113,4 +110,3 @@ impl ClientChunk {
         mesh_build_span.exit();
         meshes
     }
-}

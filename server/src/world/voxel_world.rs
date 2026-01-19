@@ -276,7 +276,10 @@ impl BlockAccess for VoxelWorld {
 }
 
 impl shared::meshing::ChunkProvider for VoxelWorld {
-    fn get_chunk(&self, pos: ChunkPos) -> Option<Arc<shared::world::chunk::Chunk>> {
+    fn get_chunk(&self, pos: ChunkPos) -> Option<Arc<Chunk>> {
+        // Note: Server chunks use RwLock<Chunk> directly (not COW) because
+        // terrain generation performs heavy mutation. We clone here to ensure
+        // the collider worker gets a consistent snapshot.
         self.chunks
             .get(&pos)
             .map(|c| Arc::new(c.value().read().clone()))

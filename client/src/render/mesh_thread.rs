@@ -1,5 +1,6 @@
 use crate::agents::PlayerControlled;
 use crate::render::mesh_draw::{choose_lod_level, LOD};
+use crate::render::mesh_logic::create_face_meshes;
 use crate::render::texture_array::TextureMap;
 use crate::world::ClientWorldMap;
 use bevy::prelude::*;
@@ -70,16 +71,16 @@ pub fn setup_mesh_thread(
                 mesh_orders.remove(i);
                 mesh_cache.remove(&chunk_pos);
                 let lod = choose_lod_level(dist as u32);
-                let Some(chunk) = chunks.get(&chunk_pos) else {
+                
+                // Clone the Arc<Chunk> - this is O(1), just an atomic increment.
+                // The chunk data itself is not copied.
+                let Some(chunk_arc) = chunks.get(&chunk_pos).map(|e| Arc::clone(&*e.value().read())) else {
                     continue;
                 };
 
                 // Catch meshing panics so the worker thread stays alive.
                 let meshed = catch_unwind(AssertUnwindSafe(|| {
-                    chunk
-                        .value()
-                        .read()
-                        .create_face_meshes(&texture_map, lod, chunk_pos)
+                    create_face_meshes(&chunk_arc, &texture_map, lod, chunk_pos)
                 }));
 
                 let face_meshes = match meshed {

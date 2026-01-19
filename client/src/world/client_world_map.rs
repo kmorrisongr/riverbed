@@ -2,9 +2,16 @@
 //!
 //! This module provides a read-only view of the world for client systems,
 //! with block modifications queued as events for network transmission.
+//!
+//! # Chunk Storage Strategy (Copy-on-Write)
+//!
+//! Chunks are stored as `RwLock<Arc<Chunk>>`. This enables efficient concurrent access:
+//! - **Readers** (mesh thread, collider cooking) clone the `Arc<Chunk>` - O(1) atomic increment
+//! - **Writers** (block placement) create a new `Arc<Chunk>` with modifications (COW)
+//!
+//! This avoids expensive full-chunk clones when passing data to worker threads.
 
 use crate::agents::PlayerControlled;
-use crate::network::models::client_chunk::ClientChunk;
 use bevy::prelude::*;
 use crossbeam::channel::Sender;
 use crossbeam_skiplist::SkipMap;
@@ -12,9 +19,10 @@ use parking_lot::RwLock;
 use shared::{
     block::Block,
     world::{
+        chunk::Chunk,
         pos::{
             pos2d::ColPos,
-            pos3d::{BlockPos, ChunkPos},
+            pos3d::{BlockPos, ChunkPos, ChunkedPos},
             PlayerCol,
         },
         ColumnUnloader, BlockAccess, MAX_HEIGHT, Y_CHUNKS, unload_column,
@@ -43,10 +51,16 @@ impl Default for RenderDistance {
 ///
 /// Provides read-only block access for physics, raycasting, and rendering.
 /// Block modifications are queued as events rather than applied directly.
+///
+/// Chunks are stored using a Copy-on-Write pattern: `RwLock<Arc<Chunk>>`.
+/// This allows worker threads (mesh generation, collider cooking) to
+/// efficiently obtain a reference-counted handle to chunk data without
+/// cloning the entire chunk contents.
 #[derive(Resource, Clone)]
 pub struct ClientWorldMap {
-    /// The chunk data, shared with the mesh thread
-    pub chunks: Arc<SkipMap<ChunkPos, RwLock<ClientChunk>>>,
+    /// The chunk data, shared with worker threads via Arc cloning.
+    /// Inner `Arc<Chunk>` is replaced (COW) when blocks are modified.
+    pub chunks: Arc<SkipMap<ChunkPos, RwLock<Arc<Chunk>>>>,
     /// Channel to notify mesh thread of chunk changes
     chunk_changes: Sender<ChunkPos>,
 }
@@ -69,9 +83,15 @@ impl ClientWorldMap {
     }
 
     /// Insert or update a chunk (called when receiving data from server)
-    pub fn insert_chunk(&self, chunk_pos: ChunkPos, chunk: ClientChunk) {
-        self.chunks.insert(chunk_pos, RwLock::new(chunk));
+    pub fn insert_chunk(&self, chunk_pos: ChunkPos, chunk: Chunk) {
+        self.chunks.insert(chunk_pos, RwLock::new(Arc::new(chunk)));
         let _ = self.chunk_changes.send(chunk_pos);
+    }
+
+    /// Get a clone of the Arc<Chunk> for a given position.
+    /// This is O(1) - just an atomic reference count increment.
+    pub fn get_chunk_arc(&self, pos: ChunkPos) -> Option<Arc<Chunk>> {
+        self.chunks.get(&pos).map(|c| Arc::clone(&*c.value().read()))
     }
 
     /// Unload all chunks in a column
@@ -129,10 +149,9 @@ impl BlockAccess for ClientWorldMap {
 }
 
 impl shared::meshing::ChunkProvider for ClientWorldMap {
-    fn get_chunk(&self, pos: ChunkPos) -> Option<Arc<shared::world::chunk::Chunk>> {
-        self.chunks
-            .get(&pos)
-            .map(|c| Arc::new(c.value().read().inner().clone()))
+    fn get_chunk(&self, pos: ChunkPos) -> Option<Arc<Chunk>> {
+        // Simply clone the Arc - no data copying needed!
+        self.get_chunk_arc(pos)
     }
 }
 
@@ -225,9 +244,16 @@ fn process_block_requests(
         let old_block = world_map.get_block(request.pos);
 
         // Apply the change locally immediately (client-side prediction)
-        let (chunk_pos, chunked_pos) = <(ChunkPos, _)>::from(request.pos);
-        if let Some(chunk) = world_map.chunks.get(&chunk_pos) {
-            chunk.value().write().set(chunked_pos, request.block);
+        // Uses Copy-on-Write: clone the chunk, modify, then swap the Arc
+        let (chunk_pos, chunked_pos) = <(ChunkPos, ChunkedPos)>::from(request.pos);
+        if let Some(entry) = world_map.chunks.get(&chunk_pos) {
+            let mut lock = entry.value().write();
+            // Clone the chunk data, modify it, then replace the Arc
+            let mut new_chunk = (**lock).clone();
+            new_chunk.set(chunked_pos, request.block);
+            *lock = Arc::new(new_chunk);
+            drop(lock);
+            
             world_map.mark_chunk_changed(chunk_pos);
 
             block_changed.write(BlockChanged {
