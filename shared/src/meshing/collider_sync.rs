@@ -88,7 +88,6 @@ fn spawn_collider_cook_worker_threads(mut commands: Commands) {
             .name(format!("collider-cook-{i}"))
             .spawn(move || {
                 while let Ok(job) = job_receiver.recv() {
-                    // Catch panics during collider cooking to avoid killing the worker thread.
                     let cooked = catch_unwind(AssertUnwindSafe(|| {
                         generate_chunk_trimesh_collider(&job.chunk, job.lod).map(|collider| {
                             StaticChunkColliderBundle::from_collider(collider, job.chunk_pos)

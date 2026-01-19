@@ -72,7 +72,6 @@ pub fn process_chunk_changes(
 
     while let Ok(chunk_position) = chunk_changes.0.try_recv() {
         tracker.invalidate_chunk(&chunk_position);
-        // Request the collider system to rebuild this chunk's collider
         collider_rebuild_requests.write(ChunkColliderRebuildRequest::new(chunk_position));
     }
 }

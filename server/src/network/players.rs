@@ -62,23 +62,19 @@ impl PlayerRegistry {
         self.players.insert(client_id, player);
     }
 
-    /// Remove a player from the registry
     pub fn remove_player(&mut self, client_id: ClientId) {
         info!("Removing player {} from registry", client_id);
         self.players.remove(&client_id);
     }
 
-    /// Get a mutable reference to a player
     pub fn get_player_mut(&mut self, client_id: ClientId) -> Option<&mut ServerPlayer> {
         self.players.get_mut(&client_id)
     }
 
-    /// Get an immutable reference to a player
     pub fn get_player(&self, client_id: ClientId) -> Option<&ServerPlayer> {
         self.players.get(&client_id)
     }
 
-    /// Check if a player is authenticated
     pub fn is_authenticated(&self, client_id: ClientId) -> bool {
         self.players
             .get(&client_id)
@@ -93,14 +89,6 @@ pub struct PlayerInputsEvent {
     pub input: ClientToServerPlayerInput,
 }
 
-/// Server-authoritative player input handling system.
-///
-/// This system receives player inputs from clients, computes desired velocity,
-/// and sets it on the player's LinearVelocity component. Avian3d will then
-/// integrate the velocity and resolve collisions against chunk colliders.
-///
-/// Note: MovementMode is stored directly as a component, and velocity is
-/// stored in LinearVelocity (no separate ServerPhysicsState needed).
 pub fn handle_player_inputs_system(
     mut events: MessageReader<PlayerInputsEvent>,
     mut registry: ResMut<PlayerRegistry>,
