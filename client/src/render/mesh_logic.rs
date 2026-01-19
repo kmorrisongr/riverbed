@@ -82,7 +82,7 @@ pub fn create_face_meshes(
             }
 
             let vertices =
-                face.vertices_packed(quad.xyz, quad.width as u32, quad.height as u32, lod as u32);
+                face.vertices_packed(quad.packed_xyz, quad.width as u32, quad.height as u32, lod as u32);
             let quad_info = (color(r, g, b) << 15) | (layer << 3) | face_n as u32;
             voxel_data.extend_from_slice(&[
                 [vertices[0], quad_info],

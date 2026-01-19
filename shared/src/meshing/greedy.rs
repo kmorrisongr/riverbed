@@ -10,7 +10,7 @@ use crate::world::{CHUNKP_S3, CHUNK_S1};
 pub struct QuadData {
     /// Packed xyz position: 6 bits each for x, y, z (18 bits used of 32)
     /// Also encodes width/height in upper bits from bgm format
-    pub xyz: u32,
+    pub packed_xyz: u32,
     pub width: u8,
     pub height: u8,
     pub block: Block,
@@ -20,17 +20,17 @@ pub struct QuadData {
 impl QuadData {
     #[inline]
     pub fn x(&self) -> u8 {
-        (self.xyz & 0x3F) as u8
+        (self.packed_xyz & 0x3F) as u8
     }
 
     #[inline]
     pub fn y(&self) -> u8 {
-        ((self.xyz >> 6) & 0x3F) as u8
+        ((self.packed_xyz >> 6) & 0x3F) as u8
     }
 
     #[inline]
     pub fn z(&self) -> u8 {
-        ((self.xyz >> 12) & 0x3F) as u8
+        ((self.packed_xyz >> 12) & 0x3F) as u8
     }
 }
 
@@ -101,7 +101,7 @@ pub fn extract_quads(chunk: &Chunk, lod: usize) -> ChunkQuads {
             )] as usize];
 
             faces[face_n].push(QuadData {
-                xyz: (quad.0 & MASK_XYZ) as u32,
+                packed_xyz: (quad.0 & MASK_XYZ) as u32,
                 width: quad.width() as u8,
                 height: quad.height() as u8,
                 block,
