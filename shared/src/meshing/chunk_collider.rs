@@ -87,7 +87,7 @@ fn quads_to_trimesh(quads: &ChunkQuads) -> (Vec<Vec3>, Vec<[u32; 3]>) {
                 quad.height as f32,
             );
 
-            vertices.extend(quad_verts.map(|v| Vec3::from_array(v)));
+            vertices.extend(quad_verts.map(Vec3::from_array));
 
             let (tri1, tri2) = face.triangle_indices(base_vertex);
             indices.push(tri1);
