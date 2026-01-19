@@ -104,8 +104,12 @@ fn target_block(
     player_cam: Query<&GlobalTransform, With<FpsCam>>,
     world: Res<ClientWorldMap>,
 ) {
-    let (mut target_block, realm) = player.single_mut().unwrap();
-    let transform = player_cam.single().unwrap();
+    let Ok((mut target_block, realm)) = player.single_mut() else {
+        return;
+    };
+    let Ok(transform) = player_cam.single() else {
+        return;
+    };
     target_block.0 = world.raycast(
         *realm,
         transform.translation(),

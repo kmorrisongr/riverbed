@@ -93,7 +93,9 @@ fn update_pos_display(
     mut pos_text_query: Query<&mut Text, With<DebugTextPos>>,
     player_query: Query<&Transform, With<PlayerControlled>>,
 ) {
-    let transform = player_query.single().unwrap();
+    let Ok(transform) = player_query.single() else {
+        return;
+    };
     if let Ok(mut pos_text) = pos_text_query.single_mut() {
         pos_text.0 = format!(
             "p: {:.1}; {:.1}; {:.1}\n",
@@ -107,7 +109,9 @@ fn update_block_display(
     mut block_text_query: Query<&mut Text, With<DebugTextBlock>>,
     world: Res<ClientWorldMap>,
 ) {
-    let target_block = player_query.single().unwrap();
+    let Ok(target_block) = player_query.single() else {
+        return;
+    };
     let block = if let Some(raycast_hit) = &target_block.0 {
         world.get_block_safe(raycast_hit.pos)
     } else {
