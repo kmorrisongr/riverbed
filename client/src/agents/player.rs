@@ -112,4 +112,3 @@ fn update_player_col(
         }
     }
 }
-

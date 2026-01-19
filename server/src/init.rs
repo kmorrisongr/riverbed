@@ -32,10 +32,7 @@ pub struct ServerInitConfig {
 ///
 /// This is the shared initialization logic used by both standalone and embedded modes.
 /// The caller is responsible for creating the `App` and calling `app.run()`
-pub fn configure_server_app(
-    app: &mut App,
-    config: ServerInitConfig,
-) {
+pub fn configure_server_app(app: &mut App, config: ServerInitConfig) {
     let seed: u64 = 42; // TODO: Load from world save or generate randomly
 
     // Create chunk changes channel for VoxelWorld

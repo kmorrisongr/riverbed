@@ -36,7 +36,11 @@ impl Plugin for BlockInteractionsPlugin {
 /// 4. Broadcasts BlockChangeConfirm to all clients
 fn handle_block_interactions(
     mut client_query: Query<
-        (Entity, &RemoteId, &mut MessageReceiver<BlockInteractionRequest>),
+        (
+            Entity,
+            &RemoteId,
+            &mut MessageReceiver<BlockInteractionRequest>,
+        ),
         With<ClientOf>,
     >,
     world: Option<Res<VoxelWorld>>,
@@ -107,11 +111,9 @@ fn handle_block_interactions(
                     new_block,
                 };
 
-                if let Err(e) = sender.send::<_, BlockInteractionChannel>(
-                    &confirm,
-                    server,
-                    &NetworkTarget::All,
-                ) {
+                if let Err(e) =
+                    sender.send::<_, BlockInteractionChannel>(&confirm, server, &NetworkTarget::All)
+                {
                     error!("Failed to broadcast block change: {:?}", e);
                 }
             } else {

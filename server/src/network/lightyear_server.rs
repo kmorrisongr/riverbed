@@ -15,8 +15,8 @@ use lightyear::netcode::{NetcodeServer, PRIVATE_KEY_BYTES};
 use lightyear::prelude::server::*;
 use lightyear::prelude::*;
 use shared::block::Block;
-use shared::items::{new_inventory, InventoryTrait, Item, Stack};
 use shared::items::item_slots::ItemHolder;
+use shared::items::{new_inventory, InventoryTrait, Item, Stack};
 use shared::net::lightyear_inputs::{action_mask_from_leafwing, PlayerInputAction};
 use shared::net::lightyear_protocol::{
     CameraOrientation, CharacterMarker, LightyearProtocolPlugin, PlayerColor, SelectedHotbarSlot,
@@ -229,7 +229,9 @@ fn handle_character_actions(
 ) {
     let delta_seconds = time.delta_secs();
 
-    for (action_state, camera_orientation, mut linear_velocity, mut movement_mode, grounded) in &mut player_query {
+    for (action_state, camera_orientation, mut linear_velocity, mut movement_mode, grounded) in
+        &mut player_query
+    {
         // Convert leafwing action state to our ActionMask for the existing physics system.
         let action_mask = action_mask_from_leafwing(action_state);
 

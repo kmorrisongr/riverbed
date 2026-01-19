@@ -1,5 +1,4 @@
 use crate::agents::{PlayerControlled, TargetBlock};
-use shared::net::lightyear_inputs::PlayerInputAction;
 use crate::render::FpsCam;
 use crate::sounds::ItemGet;
 use crate::ui::{CursorGrabbed, GameUiState, SelectedHotbarSlot};
@@ -12,6 +11,7 @@ use shared::items::item_slots::ItemHolder;
 use shared::items::{
     BlockLootTable, DropQuantity, FiringTable, InventoryTrait, Item, LootEntry, Stack,
 };
+use shared::net::lightyear_inputs::PlayerInputAction;
 use shared::world::block_entities::BlockEntities;
 use shared::world::pos::pos3d::BlockPos;
 use shared::world::realm::Realm;

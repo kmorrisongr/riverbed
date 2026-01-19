@@ -30,4 +30,3 @@ impl Plugin for ClientSideMovementPredictionPlugin {
 pub struct Crouching(pub bool);
 
 pub use shared::physics::BlockBeneathFeet;
-

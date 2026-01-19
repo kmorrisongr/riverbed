@@ -7,7 +7,9 @@ use lightyear::prelude::{MessageReceiver, MessageSender};
 use parking_lot::RwLock;
 use shared::{
     block::Block,
-    net::lightyear_protocol::{BlockChangeConfirm, BlockInteractionChannel, BlockInteractionRequest},
+    net::lightyear_protocol::{
+        BlockChangeConfirm, BlockInteractionChannel, BlockInteractionRequest,
+    },
     world::{
         chunk::Chunk,
         pos::{

@@ -45,7 +45,10 @@ pub struct Furnace {
 fn open_furnace_menu(
     mut commands: Commands,
     world: Res<ClientWorldMap>,
-    block_action_query: Query<(&TargetBlock, &ActionState<PlayerInputAction>), With<PlayerControlled>>,
+    block_action_query: Query<
+        (&TargetBlock, &ActionState<PlayerInputAction>),
+        With<PlayerControlled>,
+    >,
     furnace_query: Query<&Furnace>,
     mut block_entities: ResMut<BlockEntities>,
     mut next_ui_state: ResMut<NextState<GameUiState>>,

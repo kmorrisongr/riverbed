@@ -55,10 +55,13 @@ pub fn init(bind_addr: SocketAddr, config: GameServerConfig) {
 
     let mut app = App::new();
 
-    init::configure_server_app(&mut app, init::ServerInitConfig {
-        game_config: config,
-        add_log_plugin: false, // Client already has logging configured
-    });
+    init::configure_server_app(
+        &mut app,
+        init::ServerInitConfig {
+            game_config: config,
+            add_log_plugin: false, // Client already has logging configured
+        },
+    );
 
     app.insert_resource(LightyearServerConfig {
         bind_addr,

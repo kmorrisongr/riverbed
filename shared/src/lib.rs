@@ -40,4 +40,3 @@ pub struct GameServerConfig {
     pub is_solo: bool,
     pub broadcast_render_distance: i32,
 }
-

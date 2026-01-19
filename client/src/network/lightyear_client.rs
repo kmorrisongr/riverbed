@@ -184,16 +184,11 @@ fn capture_lightyear_inputs(
 /// For remote characters, we just add the physics bundle for prediction.
 fn handle_new_character(
     mut commands: Commands,
-    character_query: Query<
-        (Entity, Has<Controlled>),
-        (Added<Predicted>, With<CharacterMarker>),
-    >,
+    character_query: Query<(Entity, Has<Controlled>), (Added<Predicted>, With<CharacterMarker>)>,
 ) {
     for (entity, is_controlled) in &character_query {
         if is_controlled {
-            info!(
-                "Setting up controlled and predicted character {entity:?}"
-            );
+            info!("Setting up controlled and predicted character {entity:?}");
             commands
                 .entity(entity)
                 .insert((
@@ -229,10 +224,9 @@ fn handle_new_character(
         // Add physics components for prediction/simulation.
         // The server sends Position/Rotation/LinearVelocity, but we need the
         // full physics bundle for local simulation.
-        commands.entity(entity).insert((
-            DynamicPlayerPhysicsBundle::default(),
-            Realm::Overworld,
-        ));
+        commands
+            .entity(entity)
+            .insert((DynamicPlayerPhysicsBundle::default(), Realm::Overworld));
     }
 }
 
@@ -295,7 +289,15 @@ fn handle_character_actions(
     let local_camera = camera_query.single().ok();
     let delta_seconds = time.delta_secs();
 
-    for (action_state, camera_orientation, is_controlled, mut linear_velocity, mut movement_mode, grounded) in &mut player_query {
+    for (
+        action_state,
+        camera_orientation,
+        is_controlled,
+        mut linear_velocity,
+        mut movement_mode,
+        grounded,
+    ) in &mut player_query
+    {
         // Convert leafwing action state to our ActionMask for the existing physics system.
         let action_mask = action_mask_from_leafwing(action_state);
 
@@ -303,9 +305,11 @@ fn handle_character_actions(
         // For remote characters, use the replicated CameraOrientation.
         let camera_transform = if is_controlled {
             local_camera
-                .map(|cam| Transform::from_rotation(
-                    Quat::from_rotation_y(cam.yaw) * Quat::from_rotation_x(cam.pitch)
-                ))
+                .map(|cam| {
+                    Transform::from_rotation(
+                        Quat::from_rotation_y(cam.yaw) * Quat::from_rotation_x(cam.pitch),
+                    )
+                })
                 .unwrap_or_default()
         } else {
             camera_orientation

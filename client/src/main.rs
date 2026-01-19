@@ -25,6 +25,7 @@ use bevy::{
 use clap::Parser;
 use crossbeam::channel::unbounded;
 use network::NetworkPlugin;
+use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use render::{Render, TextureLoadPlugin};
 use shared::logging::logging::RiverbedLogPlugin;
 use shared::world::block_entities::BlockEntities;
@@ -32,7 +33,6 @@ use shared::world::world_rng::WorldRng;
 use sounds::SoundPlugin;
 use ui::UIPlugin;
 use world::{ClientWorldMap, ClientWorldPlugin};
-use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 
 const SEED: u64 = 42;
 pub const RENDER_DISTANCE: i32 = 32;

@@ -151,12 +151,7 @@ pub fn assign_player_col(
 pub fn send_player_pos_update(
     sender: Res<PlayerColumnUpdateSender>,
     log_sender: Res<LogEventSender>,
-    mut player_query: Query<(
-        Entity,
-        &Position,
-        &Realm,
-        &mut PlayerCol,
-    )>,
+    mut player_query: Query<(Entity, &Position, &Realm, &mut PlayerCol)>,
 ) {
     for (player, position, realm, mut player_col) in player_query.iter_mut() {
         let new_col = ColPos::from((position.0, *realm));

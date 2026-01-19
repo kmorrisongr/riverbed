@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use crate::block::Block;
 use crate::items::item_slots::ItemHolder;
 use crate::net::lightyear_inputs::PlayerInputAction;
-use crate::physics::{LinearVelocity, Position, Rotation, PLAYER_GRAVITY};
 use crate::physics::MovementMode;
+use crate::physics::{LinearVelocity, Position, Rotation, PLAYER_GRAVITY};
 use crate::world::pos::pos3d::BlockPos;
 
 // --- Marker Components ------------------------------------------------------
@@ -76,7 +76,7 @@ impl CameraOrientation {
     /// Only the rotation component is meaningful.
     pub fn to_transform(&self) -> Transform {
         Transform::from_rotation(
-            Quat::from_rotation_y(self.yaw) * Quat::from_rotation_x(self.pitch)
+            Quat::from_rotation_y(self.yaw) * Quat::from_rotation_x(self.pitch),
         )
     }
 }

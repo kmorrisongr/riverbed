@@ -38,14 +38,17 @@ fn main() {
 
     let mut app = App::new();
 
-    init::configure_server_app(&mut app, init::ServerInitConfig {
-        game_config: GameServerConfig {
-            world_name: args.world,
-            is_solo: false,
-            broadcast_render_distance: args.render_distance,
+    init::configure_server_app(
+        &mut app,
+        init::ServerInitConfig {
+            game_config: GameServerConfig {
+                world_name: args.world,
+                is_solo: false,
+                broadcast_render_distance: args.render_distance,
+            },
+            add_log_plugin: true, // Standalone server needs its own logging
         },
-        add_log_plugin: true, // Standalone server needs its own logging
-    });
+    );
 
     app.insert_resource(LightyearServerConfig {
         bind_addr,
