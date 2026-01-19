@@ -82,7 +82,8 @@ impl Plugin for LightyearClientPlugin {
 
         app.init_resource::<LightyearClientConfig>()
             .init_resource::<LightyearInputSnapshot>()
-            .add_systems(Startup, spawn_lightyear_client)
+            // Run in Update so we can wait until TargetServer is populated.
+            .add_systems(Update, spawn_lightyear_client)
             .add_systems(PreUpdate, capture_lightyear_inputs)
             .add_systems(Update, handle_new_character)
             .add_systems(Update, sync_camera_orientation)
