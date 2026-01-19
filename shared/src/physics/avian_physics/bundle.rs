@@ -1,5 +1,3 @@
-//! Player physics bundle definition for avian3d.
-
 use avian3d::prelude::*;
 use bevy::prelude::*;
 

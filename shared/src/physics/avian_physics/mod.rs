@@ -1,5 +1,3 @@
-//! Avian3d physics integration for voxel worlds.
-
 mod bundle;
 mod movement;
 mod plugin;

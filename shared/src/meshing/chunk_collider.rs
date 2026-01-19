@@ -1,5 +1,3 @@
-//! Chunk collider generation for avian3d physics.
-
 use avian3d::prelude::*;
 use bevy::prelude::*;
 

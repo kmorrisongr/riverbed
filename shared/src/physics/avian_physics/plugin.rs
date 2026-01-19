@@ -1,5 +1,3 @@
-//! Shared avian3d physics plugin wiring.
-
 use avian3d::prelude::*;
 use bevy::prelude::*;
 

@@ -1,5 +1,3 @@
-//! Movement and kinematics shared by client and server.
-
 use avian3d::prelude::LinearVelocity;
 use bevy::prelude::*;
 
@@ -120,7 +118,6 @@ pub fn compute_player_desired_velocity(
     }
 }
 
-/// Convert player action flags to camera-relative movement input.
 pub fn player_actions_to_movement_input(
     actions: &ActionMask,
     camera_transform: &Transform,
@@ -170,7 +167,6 @@ pub fn compute_velocity_from_player_actions(
 ) -> MovementStepResult {
     let mut current_velocity = velocity;
 
-    // Handle fly-mode toggle
     if actions.contains(TransmittableAction::ToggleFlyMode) {
         movement_mode = match movement_mode {
             MovementMode::Walking => MovementMode::Flying,
@@ -234,7 +230,7 @@ mod tests {
         let velocity = Vec3::ZERO;
         let mode = MovementMode::Walking;
         let input = MovementInput {
-            input_axes: Vec3::new(0.0, 0.0, 1.0), // Forward
+            input_axes: Vec3::new(0.0, 0.0, 1.0),
             jump: false,
             crouch: false,
             camera_forward: Vec3::Z,
@@ -242,8 +238,6 @@ mod tests {
         };
 
         let new_velocity = compute_player_desired_velocity(velocity, mode, true, &input, 0.1);
-
-        // Should have positive Z velocity (forward movement)
         assert!(new_velocity.z > 0.0);
     }
 
@@ -260,8 +254,6 @@ mod tests {
         };
 
         let new_velocity = compute_player_desired_velocity(velocity, mode, true, &input, 0.1);
-
-        // Should have upward velocity from jump
         assert_eq!(new_velocity.y, PLAYER_JUMP_VELOCITY);
     }
 
@@ -271,15 +263,13 @@ mod tests {
         let mode = MovementMode::Flying;
         let input = MovementInput {
             input_axes: Vec3::ZERO,
-            jump: true, // Fly up
+            jump: true,
             crouch: false,
             camera_forward: Vec3::Z,
             camera_right: Vec3::X,
         };
 
         let new_velocity = compute_player_desired_velocity(velocity, mode, false, &input, 0.1);
-
-        // Should have upward velocity
         assert_eq!(new_velocity.y, FLY_VERTICAL_SPEED);
     }
 

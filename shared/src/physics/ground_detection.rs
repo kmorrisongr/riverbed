@@ -1,5 +1,3 @@
-//! Ground detection backed by avian3d collision contacts and voxel queries.
-
 use avian3d::prelude::Collisions;
 use bevy::prelude::*;
 
@@ -126,7 +124,6 @@ mod tests {
 
     impl BlockAccess for TestWorld {
         fn get_block_safe(&self, pos: BlockPos) -> Block {
-            // Floor starts below y=0
             if pos.y < 0 {
                 Block::Granite
             } else {

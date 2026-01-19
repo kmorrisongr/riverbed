@@ -1,5 +1,3 @@
-//! Systems for synchronizing chunk colliders with the world.
-
 use bevy::prelude::*;
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender, TrySendError};
 use std::collections::{HashMap, HashSet};
@@ -127,7 +125,6 @@ fn spawn_collider_cook_worker_threads(mut commands: Commands) {
     commands.insert_resource(ColliderCookResultReceiver(result_receiver));
 }
 
-/// Dispatches collider cook jobs to worker threads from the pending queue.
 pub fn dispatch_collider_cook_jobs<P: ChunkProvider + Resource>(
     mut events: MessageReader<ChunkColliderRebuildRequest>,
     chunk_provider: Option<Res<P>>,
@@ -194,7 +191,6 @@ pub fn dispatch_collider_cook_jobs<P: ChunkProvider + Resource>(
     }
 }
 
-/// Spawns collider entities from finished cook results.
 pub fn spawn_cooked_collider_entities(
     mut commands: Commands,
     mut collider_entities: ResMut<ChunkColliderEntityRegistry>,
@@ -242,7 +238,6 @@ pub fn spawn_cooked_collider_entities(
     }
 }
 
-/// Despawns chunk collider entities when their containing column is unloaded.
 pub fn despawn_colliders_for_unloaded_columns(
     mut commands: Commands,
     mut events: MessageReader<ColUnloadEvent>,
