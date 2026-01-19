@@ -31,6 +31,12 @@ pub struct CameraOrientation {
     pub pitch: f32,
 }
 
+/// Selected hotbar slot for a player (replicated from client to server).
+/// This allows the server to validate block placement/consumption based on
+/// which item slot the player has selected.
+#[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct SelectedHotbarSlot(pub u8);
+
 impl CameraOrientation {
     pub fn new(yaw: f32, pitch: f32) -> Self {
         Self { yaw, pitch }
@@ -71,6 +77,11 @@ impl Plugin for LightyearProtocolPlugin {
         // Camera orientation is client-authoritative (client sends to server).
         // It's predicted on the client side so the local view stays responsive.
         app.register_component::<CameraOrientation>()
+            .add_prediction();
+
+        // Selected hotbar slot is client-authoritative (client sends to server).
+        // Server uses this to validate block placement/consumption.
+        app.register_component::<SelectedHotbarSlot>()
             .add_prediction();
 
         // Position/Rotation mirror the avian3d example: predicted with visual

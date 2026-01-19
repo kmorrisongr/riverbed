@@ -16,7 +16,9 @@ use lightyear::prelude::client::*;
 use lightyear::prelude::*;
 use shared::messages::ActionMask;
 use shared::net::lightyear_inputs::{action_mask_from_leafwing, PlayerInputAction};
-use shared::net::lightyear_protocol::{CameraOrientation, CharacterMarker, LightyearProtocolPlugin};
+use shared::net::lightyear_protocol::{
+    CameraOrientation, CharacterMarker, LightyearProtocolPlugin, SelectedHotbarSlot,
+};
 use shared::physics::{
     apply_player_input_to_physics, DynamicPlayerPhysicsBundle, Grounded, LinearVelocity,
     MovementMode,
@@ -28,6 +30,7 @@ use crate::agents::{PlayerControlled, TargetBlock};
 use crate::network::buffered_client::{SyncTime, SyncTimeExt};
 use crate::network::setup::{CurrentPlayerProfile, TargetServer};
 use crate::render::FpsCam;
+use crate::ui::SelectedHotbarSlot as UiSelectedHotbarSlot;
 
 const LIGHTYEAR_DEV_PRIVATE_KEY: [u8; PRIVATE_KEY_BYTES] = [0; PRIVATE_KEY_BYTES];
 
@@ -96,6 +99,8 @@ impl Plugin for LightyearClientPlugin {
             .add_systems(Update, handle_new_character)
             // Sync camera orientation from FpsCam to the replicated component.
             .add_systems(Update, sync_camera_orientation)
+            // Sync selected hotbar slot to the replicated component.
+            .add_systems(Update, sync_selected_hotbar_slot)
             // Apply character actions to predicted entities during FixedUpdate.
             .add_systems(FixedUpdate, handle_character_actions);
     }
@@ -203,6 +208,8 @@ fn handle_new_character(
                 PlayerControlled,
                 // Add CameraOrientation so we can replicate it to the server.
                 CameraOrientation::default(),
+                // Add SelectedHotbarSlot so we can replicate it to the server.
+                SelectedHotbarSlot::default(),
                 // TargetBlock is needed for block interaction (raycast result).
                 TargetBlock(None),
             ));
@@ -236,6 +243,26 @@ fn sync_camera_orientation(
 
     cam_orientation.yaw = fps_cam.yaw;
     cam_orientation.pitch = fps_cam.pitch;
+}
+
+/// Sync the selected hotbar slot from the UI resource to the replicated component
+/// on the controlled character entity. This gets replicated to the server for
+/// validating block placement/consumption.
+fn sync_selected_hotbar_slot(
+    ui_slot: Option<Res<UiSelectedHotbarSlot>>,
+    mut character_query: Query<&mut SelectedHotbarSlot, (With<Controlled>, With<CharacterMarker>)>,
+) {
+    let Some(ui_slot) = ui_slot else {
+        return;
+    };
+    let Ok(mut hotbar_slot) = character_query.single_mut() else {
+        return;
+    };
+
+    let new_slot = ui_slot.0 as u8;
+    if hotbar_slot.0 != new_slot {
+        hotbar_slot.0 = new_slot;
+    }
 }
 
 /// Apply character actions to predicted entities.

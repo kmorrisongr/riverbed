@@ -20,7 +20,9 @@ use shared::items::{new_inventory, InventoryTrait, Item, Stack};
 use shared::items::item_slots::ItemHolder;
 use shared::messages::ActionMask;
 use shared::net::lightyear_inputs::{action_mask_from_leafwing, PlayerInputAction};
-use shared::net::lightyear_protocol::{CameraOrientation, CharacterMarker, LightyearProtocolPlugin, PlayerColor};
+use shared::net::lightyear_protocol::{
+    CameraOrientation, CharacterMarker, LightyearProtocolPlugin, PlayerColor, SelectedHotbarSlot,
+};
 use shared::physics::{
     apply_player_input_to_physics, DynamicPlayerPhysicsBundle, Grounded, LinearVelocity,
     MovementMode,
@@ -194,6 +196,8 @@ fn handle_connected(
             ActionState::<PlayerInputAction>::default(),
             // Camera orientation - replicated from client to server for directional movement.
             CameraOrientation::default(),
+            // Selected hotbar slot - replicated from client to server for item validation.
+            SelectedHotbarSlot::default(),
             // Player inventory - server-authoritative, replicated to clients.
             ItemHolder::Inventory(inventory),
             // Replication configuration.
