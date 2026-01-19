@@ -20,6 +20,30 @@ pub struct CharacterMarker;
 #[derive(Component, Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PlayerColor(pub Color);
 
+/// Camera orientation for a player (replicated from client to server).
+/// This allows the server to calculate movement direction based on where the player is looking.
+#[derive(Component, Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct CameraOrientation {
+    /// Horizontal rotation in radians (left/right look direction).
+    pub yaw: f32,
+    /// Vertical rotation in radians (up/down look direction).
+    pub pitch: f32,
+}
+
+impl CameraOrientation {
+    pub fn new(yaw: f32, pitch: f32) -> Self {
+        Self { yaw, pitch }
+    }
+
+    /// Convert to a Transform that can be used for movement direction calculation.
+    /// Only the rotation component is meaningful.
+    pub fn to_transform(&self) -> Transform {
+        Transform::from_rotation(
+            Quat::from_rotation_y(self.yaw) * Quat::from_rotation_x(self.pitch)
+        )
+    }
+}
+
 /// Minimal protocol registration for lightyear-backed replication/prediction.
 /// This mirrors the official avian3d example but uses our existing physics
 /// components so we can begin wiring lightyear without disturbing the current
@@ -42,6 +66,11 @@ impl Plugin for LightyearProtocolPlugin {
         app.register_component::<CharacterMarker>();
         app.register_component::<PlayerColor>();
         app.register_component::<Name>();
+
+        // Camera orientation is client-authoritative (client sends to server).
+        // It's predicted on the client side so the local view stays responsive.
+        app.register_component::<CameraOrientation>()
+            .add_prediction();
 
         // Position/Rotation mirror the avian3d example: predicted with visual
         // interpolation and mild rollback tolerance.

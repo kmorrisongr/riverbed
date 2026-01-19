@@ -16,7 +16,7 @@ use lightyear::prelude::client::*;
 use lightyear::prelude::*;
 use shared::messages::ActionMask;
 use shared::net::lightyear_inputs::{action_mask_from_leafwing, PlayerInputAction};
-use shared::net::lightyear_protocol::{CharacterMarker, LightyearProtocolPlugin};
+use shared::net::lightyear_protocol::{CameraOrientation, CharacterMarker, LightyearProtocolPlugin};
 use shared::physics::{
     apply_player_input_to_physics, DynamicPlayerPhysicsBundle, Grounded, LinearVelocity,
     MovementMode,
@@ -94,6 +94,8 @@ impl Plugin for LightyearClientPlugin {
             .add_systems(PreUpdate, capture_lightyear_inputs)
             // Handle newly predicted characters (replicated from server).
             .add_systems(Update, handle_new_character)
+            // Sync camera orientation from FpsCam to the replicated component.
+            .add_systems(Update, sync_camera_orientation)
             // Apply character actions to predicted entities during FixedUpdate.
             .add_systems(FixedUpdate, handle_character_actions);
     }
@@ -199,6 +201,8 @@ fn handle_new_character(
                 PlayerInputAction::default_input_map(),
                 ActionState::<PlayerInputAction>::default(),
                 PlayerControlled,
+                // Add CameraOrientation so we can replicate it to the server.
+                CameraOrientation::default(),
             ));
         } else {
             info!("Remote character predicted for us: {entity:?}");
@@ -215,15 +219,34 @@ fn handle_new_character(
     }
 }
 
+/// Sync camera orientation from FpsCam to the CameraOrientation component
+/// on the controlled character entity. This gets replicated to the server.
+fn sync_camera_orientation(
+    camera_query: Query<&FpsCam>,
+    mut character_query: Query<&mut CameraOrientation, (With<Controlled>, With<CharacterMarker>)>,
+) {
+    let Ok(fps_cam) = camera_query.single() else {
+        return;
+    };
+    let Ok(mut cam_orientation) = character_query.single_mut() else {
+        return;
+    };
+
+    cam_orientation.yaw = fps_cam.yaw;
+    cam_orientation.pitch = fps_cam.pitch;
+}
+
 /// Apply character actions to predicted entities.
 /// Lightyear ensures the ActionState contains the correct inputs for the current tick,
 /// whether we're in normal simulation or during rollback.
 fn handle_character_actions(
     time: Res<Time>,
-    camera_query: Query<&Transform, With<FpsCam>>,
+    camera_query: Query<&FpsCam>,
     mut player_query: Query<
         (
             &ActionState<PlayerInputAction>,
+            Option<&CameraOrientation>,
+            Has<Controlled>,
             &mut LinearVelocity,
             &mut MovementMode,
             &Grounded,
@@ -231,13 +254,27 @@ fn handle_character_actions(
         With<Predicted>,
     >,
 ) {
-    // Get camera transform for movement orientation (use default if not available).
-    let camera_transform = camera_query.single().copied().unwrap_or_default();
+    // Get camera transform for local player's movement orientation.
+    let local_camera = camera_query.single().ok();
     let delta_seconds = time.delta_secs();
 
-    for (action_state, mut linear_velocity, mut movement_mode, grounded) in &mut player_query {
+    for (action_state, camera_orientation, is_controlled, mut linear_velocity, mut movement_mode, grounded) in &mut player_query {
         // Convert leafwing action state to our ActionMask for the existing physics system.
         let action_mask = action_mask_from_leafwing(action_state);
+
+        // For controlled (local) character, use FpsCam directly for responsiveness.
+        // For remote characters, use the replicated CameraOrientation.
+        let camera_transform = if is_controlled {
+            local_camera
+                .map(|cam| Transform::from_rotation(
+                    Quat::from_rotation_y(cam.yaw) * Quat::from_rotation_x(cam.pitch)
+                ))
+                .unwrap_or_default()
+        } else {
+            camera_orientation
+                .map(|co| co.to_transform())
+                .unwrap_or_default()
+        };
 
         apply_player_input_to_physics(
             &mut linear_velocity,

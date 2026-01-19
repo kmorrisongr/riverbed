@@ -6,7 +6,7 @@
 mod generation;
 mod init;
 mod logging;
-mod network;
+pub mod network;
 pub mod world;
 
 use std::net::{IpAddr, SocketAddr, UdpSocket};

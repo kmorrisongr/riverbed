@@ -17,7 +17,7 @@ use lightyear::prelude::server::*;
 use lightyear::prelude::*;
 use shared::messages::ActionMask;
 use shared::net::lightyear_inputs::{action_mask_from_leafwing, PlayerInputAction};
-use shared::net::lightyear_protocol::{CharacterMarker, LightyearProtocolPlugin, PlayerColor};
+use shared::net::lightyear_protocol::{CameraOrientation, CharacterMarker, LightyearProtocolPlugin, PlayerColor};
 use shared::physics::{
     apply_player_input_to_physics, DynamicPlayerPhysicsBundle, Grounded, LinearVelocity,
     MovementMode,
@@ -183,6 +183,8 @@ fn handle_connected(
             Name::new(format!("Player-{}", client_id)),
             // Leafwing input state - server needs this to receive replicated inputs.
             ActionState::<PlayerInputAction>::default(),
+            // Camera orientation - replicated from client to server for directional movement.
+            CameraOrientation::default(),
             // Replication configuration.
             Replicate::to_clients(NetworkTarget::All),
             PredictionTarget::to_clients(NetworkTarget::All),
@@ -210,6 +212,7 @@ fn handle_character_actions(
     time: Res<Time>,
     mut player_query: Query<(
         &ActionState<PlayerInputAction>,
+        &CameraOrientation,
         &mut LinearVelocity,
         &mut MovementMode,
         &Grounded,
@@ -217,14 +220,12 @@ fn handle_character_actions(
 ) {
     let delta_seconds = time.delta_secs();
 
-    for (action_state, mut linear_velocity, mut movement_mode, grounded) in &mut player_query {
+    for (action_state, camera_orientation, mut linear_velocity, mut movement_mode, grounded) in &mut player_query {
         // Convert leafwing action state to our ActionMask for the existing physics system.
         let action_mask = action_mask_from_leafwing(action_state);
 
-        // Use a default camera transform - server doesn't have camera orientation.
-        // Movement will be in world space. For proper directional movement, we'd need
-        // to replicate camera orientation, but for now this works for basic movement.
-        let camera_transform = Transform::default();
+        // Use the replicated camera orientation for directional movement.
+        let camera_transform = camera_orientation.to_transform();
 
         apply_player_input_to_physics(
             &mut linear_velocity,
