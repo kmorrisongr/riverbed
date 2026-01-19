@@ -5,8 +5,8 @@
 //! - Updating their positions based on server updates
 //! - Removing them when they disconnect
 //!
-//! Note: Local player reconciliation is handled by the reconciliation module
-//! in client/src/network/reconciliation.rs
+//! Local player prediction/reconciliation is handled by the Lightyear pipeline;
+//! this module only manages remote players.
 
 use bevy::prelude::*;
 use shared::messages::{PlayerId, ServerToClientPlayerSpawn, ServerToClientPlayerUpdate};
@@ -66,15 +66,14 @@ fn spawn_other_players(
 
 /// System to update other players' positions from server updates.
 ///
-/// Note: Local player updates are handled by the reconciliation system
-/// in the network module, not here.
+/// Local player updates are handled elsewhere by Lightyear prediction, not here.
 fn update_other_players(
     mut ev_update: MessageReader<ServerToClientPlayerUpdate>,
     mut other_players: Query<(&OtherPlayer, &mut Transform)>,
     current_player: Res<CurrentPlayerProfile>,
 ) {
     for event in ev_update.read() {
-        // Skip our own player - handled by reconciliation module
+        // Skip our own player - handled by Lightyear prediction
         if event.id == current_player.id {
             continue;
         }
