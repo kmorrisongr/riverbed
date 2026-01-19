@@ -18,7 +18,9 @@ impl Plugin for SkyPlugin {
             Duration::from_millis(500),
             TimerMode::Repeating,
         )))
-        .add_systems(Startup, spawn_sun.after(CameraSpawn))
+        // Delay sun spawn until a camera exists to parent it to, since the camera
+        // is created once the player is replicated.
+        .add_systems(Update, spawn_sun_once.after(CameraSpawn))
         .add_systems(Update, daylight_cycle);
     }
 }
@@ -30,8 +32,19 @@ struct CycleTimer(Timer);
 #[derive(Component)]
 struct Sun;
 
-fn spawn_sun(mut commands: Commands, cam_query: Query<Entity, With<FpsCam>>) {
-    let cam = cam_query.single().unwrap();
+fn spawn_sun_once(
+    mut commands: Commands,
+    cam_query: Query<Entity, With<FpsCam>>,
+    mut spawned: Local<bool>,
+) {
+    if *spawned {
+        return;
+    }
+
+    let Ok(cam) = cam_query.single() else {
+        return;
+    };
+
     commands.entity(cam).insert(Atmosphere::default());
     commands.spawn((
         Sun,
@@ -41,6 +54,8 @@ fn spawn_sun(mut commands: Commands, cam_query: Query<Entity, With<FpsCam>>) {
             ..Default::default()
         },
     ));
+
+    *spawned = true;
 }
 
 fn daylight_cycle(
@@ -55,7 +70,7 @@ fn daylight_cycle(
         // TODO: make night time prettier with a skybox, freeze the sun in the meantime
         let t = 0.6f32;
 
-        if let Some((mut light_trans, mut directional)) = query.single_mut().unwrap().into() {
+        if let Ok((mut light_trans, mut directional)) = query.single_mut() {
             light_trans.rotation = Quat::from_rotation_x(-t);
             directional.illuminance = t.sin().max(0.0).powf(2.0) * 50_000.0;
         }
