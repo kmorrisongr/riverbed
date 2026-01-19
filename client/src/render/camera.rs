@@ -28,13 +28,9 @@ pub struct Camera3dPlugin;
 impl Plugin for Camera3dPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(InputManagerPlugin::<CameraMovement>::default())
-            .add_systems(
-                Startup,
-                (cam_setup, ApplyDeferred)
-                    .chain()
-                    .in_set(CameraSpawn)
-                    .after(PlayerSpawn),
-            )
+            // Spawn the camera once a local player exists; the player is created after
+            // replication, so we cannot do this in Startup.
+            .add_systems(Update, cam_setup_once.after(PlayerSpawn))
             .add_systems(Update, apply_fps_cam)
             .add_systems(Update, adaptative_fov)
             .add_systems(Update, water_fog)
@@ -62,15 +58,22 @@ pub struct FpsCam {
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CameraSpawn;
 
-fn cam_setup(
+fn cam_setup_once(
     mut commands: Commands,
     mut cursor_options: Query<&mut CursorOptions>,
     player_query: Query<Entity, With<PlayerControlled>>,
+    mut spawned: Local<bool>,
 ) {
+    if *spawned {
+        return;
+    }
+
     use shared::physics::{PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS};
 
     let input_map = InputMap::default().with_dual_axis(CameraMovement::Pan, MouseMove::default());
-    let player = player_query.single().unwrap();
+    let Ok(player) = player_query.single() else {
+        return;
+    };
 
     // Position camera at eye level (top of capsule minus a small offset)
     let eye_height = PLAYER_CAPSULE_HEIGHT / 2.0 + PLAYER_CAPSULE_RADIUS - 0.05;
@@ -103,18 +106,25 @@ fn cam_setup(
         .insert(FpsCam::default())
         .id();
     commands.entity(player).add_child(cam);
-    let mut cursor_options = cursor_options.single_mut().unwrap();
-    cursor_options.grab_mode = CursorGrabMode::Locked;
-    cursor_options.visible = false;
+    if let Ok(mut cursor_options) = cursor_options.single_mut() {
+        cursor_options.grab_mode = CursorGrabMode::Locked;
+        cursor_options.visible = false;
+    }
+
+    *spawned = true;
 }
 
 fn adaptative_fov(
-    cam_query: Single<(&Transform, &mut Projection)>,
-    player_query: Single<&LinearVelocity, With<PlayerControlled>>,
+    mut cam_query: Query<(&Transform, &mut Projection)>,
+    player_query: Query<&LinearVelocity, With<PlayerControlled>>,
     time: Res<Time>,
 ) {
-    let linear_velocity = player_query.into_inner();
-    let (transform, mut perspective) = cam_query.into_inner();
+    let Ok(linear_velocity) = player_query.single() else {
+        return;
+    };
+    let Ok((transform, mut perspective)) = cam_query.single_mut() else {
+        return;
+    };
     // Adjust the FOV based on the player's speed
     if let Projection::Perspective(projection) = &mut *perspective {
         let speed = transform.rotation.mul_vec3(-Vec3::Z).dot(linear_velocity.0);
@@ -124,7 +134,9 @@ fn adaptative_fov(
 }
 
 fn pan_camera(mut query: Query<(&ActionState<CameraMovement>, &mut FpsCam)>) {
-    let (action_state, mut fpscam) = query.single_mut().unwrap();
+    let Ok((action_state, mut fpscam)) = query.single_mut() else {
+        return;
+    };
     let camera_pan_vector = action_state.axis_pair(&CameraMovement::Pan);
     fpscam.yaw -= CAMERA_PAN_RATE * camera_pan_vector.x;
     fpscam.pitch -= CAMERA_PAN_RATE * camera_pan_vector.y;
@@ -132,18 +144,24 @@ fn pan_camera(mut query: Query<(&ActionState<CameraMovement>, &mut FpsCam)>) {
 }
 
 fn apply_fps_cam(mut query: Query<(&mut Transform, &FpsCam)>) {
-    let (mut transform, fpscam) = query.single_mut().unwrap();
+    let Ok((mut transform, fpscam)) = query.single_mut() else {
+        return;
+    };
     transform.rotation =
         Quat::from_axis_angle(Vec3::Y, fpscam.yaw) * Quat::from_axis_angle(Vec3::X, fpscam.pitch);
 }
 
 fn water_fog(
-    cam: Single<(&mut DistanceFog, &GlobalTransform)>,
-    player: Single<&Realm, With<PlayerControlled>>,
+    mut cam: Query<(&mut DistanceFog, &GlobalTransform)>,
+    player: Query<&Realm, With<PlayerControlled>>,
     world: Res<ClientWorldMap>,
 ) {
-    let (mut fog, transform) = cam.into_inner();
-    let &realm = player.into_inner();
+    let Ok((mut fog, transform)) = cam.single_mut() else {
+        return;
+    };
+    let Ok(&realm) = player.single() else {
+        return;
+    };
     let block_pos = (transform.translation(), realm).into();
     if world.get_block(block_pos) == Block::SeaBlock {
         fog.color = WATER_COLOR;

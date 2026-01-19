@@ -117,20 +117,23 @@ pub struct LightyearPhysicsPlugin;
 
 impl Plugin for LightyearPhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(lightyear::avian3d::plugin::LightyearAvianPlugin {
-            replication_mode: AvianReplicationMode::Position,
-            ..default()
-        });
+        // Only add physics once; servers also install SharedPhysicsWorldPlugin.
+        if !app.is_plugin_added::<PhysicsSchedulePlugin>() {
+            app.add_plugins(lightyear::avian3d::plugin::LightyearAvianPlugin {
+                replication_mode: AvianReplicationMode::Position,
+                ..default()
+            });
 
-        app.add_plugins(
-            PhysicsPlugins::default()
-                .with_length_unit(1.0)
-                .build()
-                .disable::<PhysicsTransformPlugin>()
-                .disable::<PhysicsInterpolationPlugin>(),
-        );
+            app.add_plugins(
+                PhysicsPlugins::default()
+                    .with_length_unit(1.0)
+                    .build()
+                    .disable::<PhysicsTransformPlugin>()
+                    .disable::<PhysicsInterpolationPlugin>(),
+            );
 
-        app.insert_resource(Gravity(Vec3::new(0.0, -PLAYER_GRAVITY, 0.0)));
+            app.insert_resource(Gravity(Vec3::new(0.0, -PLAYER_GRAVITY, 0.0)));
+        }
     }
 }
 
