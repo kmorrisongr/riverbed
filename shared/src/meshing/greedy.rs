@@ -146,21 +146,37 @@ fn voxel_data_lod(chunk: &Chunk, lod: usize) -> Vec<u16> {
         return chunk.data.unpack_u16();
     }
 
-    // For LOD > 1: read directly from packed data during downsampling
-    // This avoids allocating a full CHUNKP_S3 array just to downsample it
-    let mut res = vec![0u16; CHUNKP_S3];
-    for x in 0..CHUNK_S1 {
-        for y in 0..CHUNK_S1 {
-            for z in 0..CHUNK_S1 {
-                let lod_i = pad_linearize(x / lod, y / lod, z / lod);
-                if res[lod_i] == 0 {
-                    // Read directly from packed storage instead of unpacking first
-                    res[lod_i] = chunk.data.get(pad_linearize(x, y, z)) as u16;
+    let mut lod_voxels = vec![0u16; CHUNKP_S3];
+    let step = lod;
+
+    for base_x in (0..CHUNK_S1).step_by(step) {
+        let max_x = (base_x + step).min(CHUNK_S1);
+        for base_y in (0..CHUNK_S1).step_by(step) {
+            let max_y = (base_y + step).min(CHUNK_S1);
+            for base_z in (0..CHUNK_S1).step_by(step) {
+                let max_z = (base_z + step).min(CHUNK_S1);
+                let lod_index = pad_linearize(base_x / step, base_y / step, base_z / step);
+
+                if lod_voxels[lod_index] != 0 {
+                    continue;
+                }
+
+                'cell: for x in base_x..max_x {
+                    for y in base_y..max_y {
+                        for z in base_z..max_z {
+                            let voxel = chunk.data.get(pad_linearize(x, y, z)) as u16;
+                            if voxel != 0 {
+                                lod_voxels[lod_index] = voxel;
+                                break 'cell;
+                            }
+                        }
+                    }
                 }
             }
         }
     }
-    res
+
+    lod_voxels
 }
 
 #[cfg(test)]
