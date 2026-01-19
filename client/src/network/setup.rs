@@ -6,6 +6,8 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::thread;
 use std::time::Duration;
 
+use super::chunk_streaming::ChunkClientConfig;
+
 #[derive(Resource, Debug, Clone)]
 pub struct SelectedWorld {
     pub name: Option<String>,
@@ -48,6 +50,8 @@ pub fn launch_local_server_system(
     mut target: ResMut<TargetServer>,
     selected_world: Res<SelectedWorld>,
     mut client_cfg: Option<ResMut<crate::network::lightyear_client::LightyearClientConfig>>,
+    mut chunk_client_cfg: Option<ResMut<ChunkClientConfig>>,
+    player_profile: Res<CurrentPlayerProfile>,
 ) {
     if target.address.is_some() {
         debug!("Skipping launch local server - address already set");
@@ -87,6 +91,16 @@ pub fn launch_local_server_system(
         if let Some(cfg) = client_cfg.as_deref_mut() {
             cfg.server_addr = address;
         }
+        
+        // Configure chunk streaming client to connect to the chunk server
+        // The chunk server runs on port 5001 (same IP as lightyear server)
+        if let Some(chunk_cfg) = chunk_client_cfg.as_deref_mut() {
+            let chunk_server_addr = SocketAddr::new(address.ip(), 5001);
+            chunk_cfg.server_addr = Some(chunk_server_addr);
+            chunk_cfg.client_id = player_profile.id;
+            info!("Chunk streaming client will connect to {}", chunk_server_addr);
+        }
+        
         info!("Local server launched, client will connect to {}", address);
     } else {
         error!("Error: No world selected. Unable to launch the server.");
