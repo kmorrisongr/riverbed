@@ -13,8 +13,9 @@
 use avian3d::prelude::*;
 use bevy::prelude::*;
 
-use crate::block::{Face};
+use crate::block::Face;
 use crate::meshing::{extract_quads, ChunkQuads};
+use crate::physics::collision_layers_for_realm;
 use crate::world::chunk::Chunk;
 use crate::world::pos::pos3d::ChunkPos;
 use crate::world::CHUNK_S1;
@@ -40,6 +41,7 @@ pub struct StaticChunkColliderBundle {
     pub rigid_body: RigidBody,
     pub position: Position,
     pub rotation: Rotation,
+    pub collision_layers: CollisionLayers,
 }
 
 impl StaticChunkColliderBundle {
@@ -74,6 +76,7 @@ impl StaticChunkColliderBundle {
             rigid_body: RigidBody::Static,
             position: Position(world_pos),
             rotation: Rotation::default(),
+            collision_layers: collision_layers_for_realm(chunk_pos.realm),
         }
     }
 }

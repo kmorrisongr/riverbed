@@ -218,12 +218,13 @@ fn handle_auth_requests(
 
         let transform = Transform::from_translation(spawn_position);
 
+        let realm = Realm::Overworld;
         commands.spawn((
             transform,
-            Realm::Overworld,
+            realm,
             NetworkPlayer { client_id },
             ClientReportedPredictedPosition(spawn_position),
-            DynamicPlayerPhysicsBundle::from_transform(&transform),
+            DynamicPlayerPhysicsBundle::from_transform(&transform, realm),
         ));
         info!(
             "Spawned ECS entity for player {} at {:?}",

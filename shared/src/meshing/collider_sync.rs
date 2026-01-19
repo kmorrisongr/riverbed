@@ -67,6 +67,12 @@ pub struct ChunkColliderPending {
     pub pending: HashMap<ChunkPos, usize>,
 }
 
+/// Per-chunk generation counter to discard stale cook results.
+#[derive(Resource, Default)]
+pub struct ChunkColliderGeneration {
+    pub generation: HashMap<ChunkPos, u64>,
+}
+
 #[derive(Resource)]
 pub struct ChunkColliderJobSender(pub Sender<ChunkColliderJob>);
 
@@ -77,11 +83,13 @@ struct ChunkColliderJob {
     chunk_pos: ChunkPos,
     chunk: Arc<Chunk>,
     lod: usize,
+    generation: u64,
 }
 
 struct ChunkColliderResult {
     chunk_pos: ChunkPos,
     bundle: Option<StaticChunkColliderBundle>,
+    generation: u64,
 }
 
 /// Trait for accessing chunk data. Implemented by both ClientWorldMap and VoxelWorld.
@@ -129,6 +137,7 @@ fn setup_collider_worker(mut commands: Commands) {
                         .send(ChunkColliderResult {
                             chunk_pos: job.chunk_pos,
                             bundle,
+                            generation: job.generation,
                         })
                         .is_err()
                     {
@@ -149,6 +158,7 @@ pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
     chunk_provider: Option<Res<P>>,
     mut pending: ResMut<ChunkColliderPending>,
     mut in_flight: ResMut<ChunkColliderInFlight>,
+    mut generation: ResMut<ChunkColliderGeneration>,
     job_sender: Res<ChunkColliderJobSender>,
 ) {
     let Some(chunk_provider) = chunk_provider else {
@@ -182,9 +192,18 @@ pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
             continue;
         };
 
+        let gen_entry = generation.generation.entry(chunk_pos).or_insert(0);
+        *gen_entry += 1;
+        let generation_value = *gen_entry;
+
         match job_sender
             .0
-            .try_send(ChunkColliderJob { chunk_pos, chunk, lod })
+            .try_send(ChunkColliderJob {
+                chunk_pos,
+                chunk,
+                lod,
+                generation: generation_value,
+            })
         {
             Ok(()) => {
                 pending.pending.remove(&chunk_pos);
@@ -213,6 +232,7 @@ pub fn apply_finished_collider_cooks(
     mut commands: Commands,
     mut collider_entities: ResMut<ChunkColliderEntityRegistry>,
     mut in_flight: ResMut<ChunkColliderInFlight>,
+    generation: Res<ChunkColliderGeneration>,
     results: Option<Res<ChunkColliderResultReceiver>>,
 ) {
     let Some(results) = results else {
@@ -221,7 +241,19 @@ pub fn apply_finished_collider_cooks(
 
     let mut applied = 0usize;
 
-    for ChunkColliderResult { chunk_pos, bundle } in results.0.try_iter() {
+    for ChunkColliderResult {
+        chunk_pos,
+        bundle,
+        generation: result_gen,
+    } in results.0.try_iter()
+    {
+        // Drop stale results if a newer generation was queued for the same chunk
+        let current_gen = generation.generation.get(&chunk_pos).copied().unwrap_or(0);
+        if result_gen != current_gen {
+            in_flight.in_flight.remove(&chunk_pos);
+            continue;
+        }
+
         // Remove old collider entity if present
         if let Some(old_entity) = collider_entities.entities.remove(&chunk_pos) {
             commands.entity(old_entity).despawn();
@@ -252,12 +284,14 @@ pub fn despawn_colliders_for_unloaded_columns(
     mut collider_entities: ResMut<ChunkColliderEntityRegistry>,
     mut pending: ResMut<ChunkColliderPending>,
     mut in_flight: ResMut<ChunkColliderInFlight>,
+    mut generation: ResMut<ChunkColliderGeneration>,
 ) {
     for event in events.read() {
         for chunk_pos in chunks_in_col(&event.0) {
             // Cancel any pending or in-flight cook task for this chunk
             pending.pending.remove(&chunk_pos);
             in_flight.in_flight.remove(&chunk_pos);
+            generation.generation.remove(&chunk_pos);
 
             if let Some(entity) = collider_entities.entities.remove(&chunk_pos) {
                 commands.entity(entity).despawn();
@@ -288,6 +322,7 @@ impl<P: ChunkProvider + Resource> Plugin for ChunkColliderPlugin<P> {
         app.init_resource::<ChunkColliderEntityRegistry>()
             .init_resource::<ChunkColliderPending>()
             .init_resource::<ChunkColliderInFlight>()
+            .init_resource::<ChunkColliderGeneration>()
             .add_systems(Startup, setup_collider_worker)
             .add_message::<ChunkColliderRebuildRequest>()
             .add_systems(

@@ -61,7 +61,7 @@ pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
             transform,
             Visibility::default(),
             realm,
-            DynamicPlayerPhysicsBundle::from_transform(&transform),
+            DynamicPlayerPhysicsBundle::from_transform(&transform, realm),
             TargetBlock(None),
             ItemHolder::Inventory(inventory),
             PlayerControlled,

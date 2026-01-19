@@ -4,7 +4,9 @@ use avian3d::prelude::*;
 use bevy::prelude::*;
 
 use super::{MovementMode, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS};
+use crate::physics::collision_layers_for_realm;
 use crate::physics::ground_detection::{OnGround, SteppingOn};
+use crate::world::realm::Realm;
 
 /// Physics bundle for dynamic player entities using avian3d.
 ///
@@ -28,6 +30,7 @@ pub struct DynamicPlayerPhysicsBundle {
     pub ccd: SweptCcd,
     pub position: Position,
     pub rotation: Rotation,
+    pub collision_layers: CollisionLayers,
     // Movement state components (shared with ground detection systems)
     pub movement_mode: MovementMode,
     pub on_ground: OnGround,
@@ -36,7 +39,7 @@ pub struct DynamicPlayerPhysicsBundle {
 
 impl DynamicPlayerPhysicsBundle {
     /// Create a new dynamic player physics bundle with a capsule collider.
-    pub fn new() -> Self {
+    pub fn new_in_realm(realm: Realm) -> Self {
         Self {
             rigid_body: RigidBody::Dynamic,
             collider: Collider::capsule(PLAYER_CAPSULE_RADIUS, PLAYER_CAPSULE_HEIGHT),
@@ -46,14 +49,15 @@ impl DynamicPlayerPhysicsBundle {
             locked_axes: LockedAxes::ROTATION_LOCKED,
             // Use standard gravity (configured via Gravity resource)
             gravity_scale: GravityScale(1.0),
-            // Low friction for responsive movement
-            friction: Friction::new(0.1),
+            // Let kinematic controller handle horizontal response; avoid double friction
+            friction: Friction::new(0.0),
             // No bounce
             restitution: Restitution::new(0.0),
             // Enable continuous collision detection for fast movement
             ccd: SweptCcd::default(),
             position: Position::default(),
             rotation: Rotation::default(),
+            collision_layers: collision_layers_for_realm(realm),
             // Movement state defaults
             movement_mode: MovementMode::default(),
             on_ground: OnGround::default(),
@@ -62,8 +66,8 @@ impl DynamicPlayerPhysicsBundle {
     }
 
     /// Create the bundle positioned/oriented to match an existing Transform.
-    pub fn from_transform(transform: &Transform) -> Self {
-        let mut bundle = Self::new();
+    pub fn from_transform(transform: &Transform, realm: Realm) -> Self {
+        let mut bundle = Self::new_in_realm(realm);
         bundle.position = Position(transform.translation);
         bundle.rotation = Rotation(transform.rotation);
         bundle
@@ -72,6 +76,6 @@ impl DynamicPlayerPhysicsBundle {
 
 impl Default for DynamicPlayerPhysicsBundle {
     fn default() -> Self {
-        Self::new()
+        Self::new_in_realm(Realm::Overworld)
     }
 }
