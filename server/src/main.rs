@@ -3,6 +3,8 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use bevy::log::info;
 use bevy::prelude::*;
 use clap::Parser;
+#[cfg(feature = "lightyear-net")]
+use server::network::lightyear_server::LightyearServerPlugin;
 use shared::{GameServerConfig, RENDER_DISTANCE};
 
 mod generation;
@@ -69,6 +71,9 @@ fn main() {
             add_log_broadcast: true, // Broadcast log events to clients
         },
     );
+
+    #[cfg(feature = "lightyear-net")]
+    app.add_plugins(LightyearServerPlugin);
 
     info!("Server entering main loop");
     app.run();
