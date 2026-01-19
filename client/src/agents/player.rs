@@ -11,8 +11,8 @@ use shared::{
     DEFAULT_SPAWN_POSITION,
 };
 
-use super::{block_action::BlockActionPlugin, key_binds::KeyBinds, Crouching};
-use shared::net::lightyear_inputs::{PlayerInputAction};
+use super::{block_action::BlockActionPlugin, Crouching};
+use shared::net::lightyear_inputs::PlayerInputAction;
 pub const HOTBAR_SLOTS: usize = 8;
 
 pub struct PlayerPlugin;
@@ -22,10 +22,7 @@ pub struct PlayerSpawn;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(confy::load_path::<KeyBinds>("key_bindings.toml").unwrap())
-            .add_plugins(BlockActionPlugin)
-            // Action (Hit/Modify) is used for block interactions
-            .add_plugins(InputManagerPlugin::<Action>::default())
+        app.add_plugins(BlockActionPlugin)
             .add_plugins(InputManagerPlugin::<PlayerInputAction>::default())
             .add_systems(
                 Startup,
@@ -41,14 +38,7 @@ pub struct PlayerControlled;
 #[derive(Component)]
 pub struct TargetBlock(pub Option<BlockRayCastHit>);
 
-/// Actions for block interaction (hit/break, modify/place)
-#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Debug, Hash, Reflect)]
-pub enum Action {
-    Hit,
-    Modify,
-}
-
-pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
+pub fn spawn_player(mut commands: Commands) {
     let realm = Realm::Overworld;
     let mut inventory = new_inventory::<HOTBAR_SLOTS>();
     inventory.try_add(Stack::Some(Item::Block(Block::Smelter), 1));
@@ -71,10 +61,6 @@ pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
         ))
         .insert(SpatialListener::new(0.3))
         .insert((FootstepCD(0.), BlockSoundCD(0.)))
-        .insert(InputMap::new([
-            (Action::Hit, key_binds.hit),
-            (Action::Modify, key_binds.modify),
-        ]))
         // Leafwing bundle was removed; insert components directly
         .insert(PlayerInputAction::default_input_map())
         .insert(ActionState::<PlayerInputAction>::default())

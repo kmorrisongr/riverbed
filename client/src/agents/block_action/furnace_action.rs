@@ -1,10 +1,11 @@
 use crate::{
-    agents::{Action, PlayerControlled, TargetBlock},
+    agents::{PlayerControlled, TargetBlock},
     ui::{GameUiState, OpenFurnace},
     world::{ClientWorldMap, SetBlockRequest},
 };
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
+use shared::net::lightyear_inputs::PlayerInputAction;
 use shared::{
     items::{
         item_slots::{furnace_slots, ItemHolder},
@@ -44,14 +45,14 @@ pub struct Furnace {
 fn open_furnace_menu(
     mut commands: Commands,
     world: Res<ClientWorldMap>,
-    block_action_query: Query<(&TargetBlock, &ActionState<Action>), With<PlayerControlled>>,
+    block_action_query: Query<(&TargetBlock, &ActionState<PlayerInputAction>), With<PlayerControlled>>,
     furnace_query: Query<&Furnace>,
     mut block_entities: ResMut<BlockEntities>,
     mut next_ui_state: ResMut<NextState<GameUiState>>,
     mut furnace_menu: ResMut<OpenFurnace>,
 ) {
     for (target_block_opt, action) in block_action_query.iter() {
-        if !action.just_pressed(&Action::Modify) {
+        if !action.just_pressed(&PlayerInputAction::Modify) {
             continue;
         }
         let Some(target_block) = &target_block_opt.0 else {

@@ -1,4 +1,5 @@
-use crate::agents::{Action, PlayerControlled, TargetBlock};
+use crate::agents::{PlayerControlled, TargetBlock};
+use shared::net::lightyear_inputs::PlayerInputAction;
 use crate::render::FpsCam;
 use crate::sounds::ItemGet;
 use crate::ui::{CursorGrabbed, GameUiState, SelectedHotbarSlot};
@@ -151,7 +152,7 @@ fn break_action(
         Entity,
         &TargetBlock,
         &mut ItemHolder,
-        &ActionState<Action>,
+        &ActionState<PlayerInputAction>,
         Option<&mut BlockLootAction>,
     )>,
     selected_slot: Res<SelectedHotbarSlot>,
@@ -166,9 +167,9 @@ fn break_action(
     {
         let Some(mut looting) = opt_looting else {
             // No current looting action, we add one
-            let action_type = if action.pressed(&Action::Hit) {
+            let action_type = if action.pressed(&PlayerInputAction::Hit) {
                 BlockActionType::Breaking
-            } else if action.pressed(&Action::Modify) {
+            } else if action.pressed(&PlayerInputAction::Modify) {
                 BlockActionType::Harvesting
             } else {
                 continue;
@@ -199,8 +200,8 @@ fn break_action(
         };
         // There's a block action
         if !action.pressed(&match looting.action_type {
-            BlockActionType::Breaking => Action::Hit,
-            BlockActionType::Harvesting => Action::Modify,
+            BlockActionType::Breaking => PlayerInputAction::Hit,
+            BlockActionType::Harvesting => PlayerInputAction::Modify,
         }) {
             commands.entity(player).remove::<BlockLootAction>();
             continue;
@@ -278,11 +279,15 @@ fn place_block(
     mut commands: Commands,
     world: Res<ClientWorldMap>,
     mut set_block_events: MessageWriter<SetBlockRequest>,
-    mut block_action_query: Query<(&TargetBlock, &mut ItemHolder, &ActionState<Action>)>,
+    mut block_action_query: Query<(
+        &TargetBlock,
+        &mut ItemHolder,
+        &ActionState<PlayerInputAction>,
+    )>,
     selected_slot: Res<SelectedHotbarSlot>,
 ) {
     for (target_block_opt, mut hotbar, action) in block_action_query.iter_mut() {
-        if !action.just_pressed(&Action::Modify) {
+        if !action.just_pressed(&PlayerInputAction::Modify) {
             continue;
         }
         let Some(target_block) = &target_block_opt.0 else {
