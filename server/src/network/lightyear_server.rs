@@ -29,6 +29,8 @@ use shared::physics::{
 use shared::world::realm::Realm;
 use shared::{DEFAULT_SPAWN_POSITION, PROTOCOL_ID, TICKS_PER_SECOND};
 
+use crate::network::block_interactions::BlockInteractionsPlugin;
+
 /// Interval at which the server sends replication updates to clients.
 const SEND_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -96,6 +98,9 @@ impl Plugin for LightyearServerPlugin {
             // Register observers for client connection lifecycle.
             .add_observer(handle_new_client)
             .add_observer(handle_connected);
+
+        // Add block interactions plugin (receives block change requests, broadcasts confirmations).
+        app.add_plugins(BlockInteractionsPlugin);
     }
 }
 

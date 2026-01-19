@@ -1,4 +1,3 @@
-use crate::network::block_interactions::{handle_block_interactions, BlockInteractionEvent};
 use crate::network::broadcast_world::{ChunkBroadcastPlugin, ChunkDeliveryTracker, ServerTick};
 use crate::network::players::{
     broadcast_player_updates_system, handle_player_inputs_system, ClientReportedPredictedPosition,
@@ -42,7 +41,7 @@ impl Plugin for ServerNetworkPlugin {
 
         app.init_resource::<PlayerRegistry>();
         app.add_message::<PlayerInputsEvent>();
-        app.add_message::<BlockInteractionEvent>();
+        // NOTE: Block interactions are now handled via lightyear in BlockInteractionsPlugin
         app.add_message::<IncomingAuthRequestEvent>();
         app.add_message::<ClientDisconnectRequestEvent>();
 
@@ -61,7 +60,7 @@ impl Plugin for ServerNetworkPlugin {
             )
                 .chain(),
         );
-        app.add_systems(Update, handle_block_interactions);
+        // NOTE: Block interactions are now handled via lightyear in BlockInteractionsPlugin
     }
 }
 
@@ -95,7 +94,6 @@ fn handle_server_events(
 fn receive_client_messages(
     mut server: ResMut<RenetServer>,
     mut ev_player_inputs: MessageWriter<PlayerInputsEvent>,
-    mut ev_block_interaction: MessageWriter<BlockInteractionEvent>,
     mut ev_auth: MessageWriter<IncomingAuthRequestEvent>,
     mut ev_exit: MessageWriter<ClientDisconnectRequestEvent>,
 ) {
@@ -108,7 +106,6 @@ fn receive_client_messages(
                 client_id,
                 message,
                 &mut ev_player_inputs,
-                &mut ev_block_interaction,
                 &mut ev_auth,
                 &mut ev_exit,
             );
@@ -122,7 +119,6 @@ fn receive_client_messages(
                 client_id,
                 message,
                 &mut ev_player_inputs,
-                &mut ev_block_interaction,
                 &mut ev_auth,
                 &mut ev_exit,
             );
@@ -134,7 +130,6 @@ fn handle_client_message(
     client_id: ClientId,
     message: ClientToServerMessage,
     ev_player_inputs: &mut MessageWriter<PlayerInputsEvent>,
-    ev_block_interaction: &mut MessageWriter<BlockInteractionEvent>,
     ev_auth: &mut MessageWriter<IncomingAuthRequestEvent>,
     ev_exit: &mut MessageWriter<ClientDisconnectRequestEvent>,
 ) {
@@ -144,11 +139,10 @@ fn handle_client_message(
                 ev_player_inputs.write(PlayerInputsEvent { client_id, input });
             }
         }
-        ClientToServerMessage::BlockInteraction(interaction) => {
-            ev_block_interaction.write(BlockInteractionEvent {
-                client_id,
-                interaction,
-            });
+        ClientToServerMessage::BlockInteraction(_interaction) => {
+            // NOTE: Block interactions are now handled via lightyear in BlockInteractionsPlugin
+            // This branch exists for message enum completeness but should not receive messages
+            warn!("Received legacy block interaction message from {}, ignoring (use lightyear)", client_id);
         }
         ClientToServerMessage::AuthRequest(request) => {
             info!("Auth request from {}: {:?}", client_id, request);

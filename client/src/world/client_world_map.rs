@@ -2,9 +2,12 @@ use crate::agents::PlayerControlled;
 use bevy::prelude::*;
 use crossbeam::channel::Sender;
 use crossbeam_skiplist::SkipMap;
+use lightyear::prelude::client::Client;
+use lightyear::prelude::{MessageReceiver, MessageSender};
 use parking_lot::RwLock;
 use shared::{
     block::Block,
+    net::lightyear_protocol::{BlockChangeConfirm, BlockInteractionChannel, BlockInteractionRequest},
     world::{
         chunk::Chunk,
         pos::{
@@ -145,6 +148,7 @@ impl Plugin for ClientWorldPlugin {
             .add_message::<ColUnloadEvent>()
             .add_plugins(shared::meshing::ChunkColliderPlugin::<ClientWorldMap>::default())
             .add_systems(Update, process_block_requests)
+            .add_systems(Update, handle_server_block_confirmations)
             .add_systems(Update, unload_distant_columns);
     }
 }
@@ -182,6 +186,7 @@ fn process_block_requests(
     world_map: Option<Res<ClientWorldMap>>,
     mut requests: MessageReader<SetBlockRequest>,
     mut block_changed: MessageWriter<BlockChanged>,
+    mut client_query: Query<&mut MessageSender<BlockInteractionRequest>, With<Client>>,
 ) {
     let Some(world_map) = world_map else {
         return;
@@ -210,7 +215,64 @@ fn process_block_requests(
             });
         }
 
-        // TODO: Send block changes to server via lightyear message/channel
-        // For now, block changes are client-side only
+        // Send block change request to server via lightyear
+        if let Ok(mut sender) = client_query.single_mut() {
+            sender.send::<BlockInteractionChannel>(BlockInteractionRequest {
+                position: request.pos,
+                new_block: request.block,
+            });
+        }
+    }
+}
+
+/// Handle server-confirmed block changes received via Lightyear.
+///
+/// This system processes BlockChangeConfirm messages from the server, which are:
+/// 1. Confirmations of changes this client made (already applied optimistically)
+/// 2. Changes made by other players
+/// 3. Server-side block changes (redstone, physics, game events)
+///
+/// For other players' changes or server changes, we apply them to the local world.
+/// For our own changes, this serves as confirmation (we already applied them optimistically).
+fn handle_server_block_confirmations(
+    world_map: Option<Res<ClientWorldMap>>,
+    mut client_query: Query<&mut MessageReceiver<BlockChangeConfirm>, With<Client>>,
+    mut block_changed: MessageWriter<BlockChanged>,
+) {
+    let Some(world_map) = world_map else {
+        return;
+    };
+
+    let Ok(mut receiver) = client_query.single_mut() else {
+        return;
+    };
+
+    for confirm in receiver.receive() {
+        let current_block = world_map.get_block(confirm.position);
+
+        // If the block is already what the server says it should be, skip
+        // (this handles our own optimistic updates that were correct)
+        if current_block == confirm.new_block {
+            continue;
+        }
+
+        // Apply the server's authoritative change
+        let (chunk_pos, chunked_pos) = <(ChunkPos, ChunkedPos)>::from(confirm.position);
+        if let Some(entry) = world_map.chunks.get(&chunk_pos) {
+            let mut lock = entry.value().write();
+            let mut new_chunk = (**lock).clone();
+            new_chunk.set(chunked_pos, confirm.new_block);
+            *lock = Arc::new(new_chunk);
+            drop(lock);
+
+            world_map.mark_chunk_changed(chunk_pos);
+
+            // Emit BlockChanged event for other systems (sounds, particles, etc.)
+            block_changed.write(BlockChanged {
+                pos: confirm.position,
+                old_block: confirm.old_block,
+                new_block: confirm.new_block,
+            });
+        }
     }
 }

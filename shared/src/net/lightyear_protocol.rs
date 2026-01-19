@@ -6,10 +6,12 @@ use lightyear::prelude::input::leafwing;
 use lightyear::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::block::Block;
 use crate::items::item_slots::ItemHolder;
 use crate::net::lightyear_inputs::PlayerInputAction;
 use crate::physics::{LinearVelocity, Position, Rotation, PLAYER_GRAVITY};
 use crate::physics::MovementMode;
+use crate::world::pos::pos3d::BlockPos;
 
 // --- Marker Components ------------------------------------------------------
 
@@ -36,6 +38,34 @@ pub struct CameraOrientation {
 /// which item slot the player has selected.
 #[derive(Component, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct SelectedHotbarSlot(pub u8);
+
+// --- Lightyear Messages for Block Interactions ------------------------------
+
+/// Request from client to server to change a block.
+/// Server will validate the request (distance, auth, item availability) before applying.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct BlockInteractionRequest {
+    /// Position of the block to change.
+    pub position: BlockPos,
+    /// New block type to set at the position.
+    pub new_block: Block,
+}
+
+/// Confirmation from server to clients that a block was changed.
+/// Server broadcasts this to all clients after validating and applying a block change.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct BlockChangeConfirm {
+    /// Position of the changed block.
+    pub position: BlockPos,
+    /// Previous block type before the change.
+    pub old_block: Block,
+    /// New block type after the change.
+    pub new_block: Block,
+}
+
+/// Channel for reliable block interaction messages.
+/// Uses ordered reliable delivery to ensure block changes are applied in order.
+pub struct BlockInteractionChannel;
 
 impl CameraOrientation {
     pub fn new(yaw: f32, pitch: f32) -> Self {
@@ -112,6 +142,23 @@ impl Plugin for LightyearProtocolPlugin {
         // and replicates the state to clients. No prediction needed since item
         // transactions are not latency-sensitive like movement.
         app.register_component::<ItemHolder>();
+
+        // --- Block Interaction Messages and Channel ---
+
+        // Register the reliable channel for block interactions.
+        app.add_channel::<BlockInteractionChannel>(ChannelSettings {
+            mode: ChannelMode::OrderedReliable(ReliableSettings::default()),
+            ..default()
+        })
+        .add_direction(NetworkDirection::Bidirectional);
+
+        // Register client->server block interaction request.
+        app.register_message::<BlockInteractionRequest>()
+            .add_direction(NetworkDirection::ClientToServer);
+
+        // Register server->client block change confirmation.
+        app.register_message::<BlockChangeConfirm>()
+            .add_direction(NetworkDirection::ServerToClient);
     }
 }
 
