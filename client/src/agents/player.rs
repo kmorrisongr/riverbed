@@ -17,7 +17,6 @@ pub struct PlayerSpawn;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(BlockActionPlugin)
-            .add_plugins(InputManagerPlugin::<PlayerInputAction>::default())
             .add_systems(Update, update_player_col);
     }
 }
