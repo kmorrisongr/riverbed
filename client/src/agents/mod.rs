@@ -1,5 +1,4 @@
 mod block_action;
-pub mod key_binds;
 mod movement;
 mod other_players;
 mod player;

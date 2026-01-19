@@ -1,6 +1,7 @@
 use crate::sounds::{on_item_get, BlockSoundCD, FootstepCD};
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
+use serde::{Deserialize, Serialize};
 use shared::physics::DynamicPlayerPhysicsBundle;
 use shared::world::pos::pos2d::ColPos;
 use shared::world::pos::PlayerCol;
@@ -38,6 +39,58 @@ pub struct PlayerControlled;
 #[derive(Component)]
 pub struct TargetBlock(pub Option<BlockRayCastHit>);
 
+#[derive(Serialize, Deserialize)]
+struct KeyBindsConfig {
+    forward: KeyCode,
+    backward: KeyCode,
+    left: KeyCode,
+    right: KeyCode,
+    jump: KeyCode,
+    crouch: KeyCode,
+    toggle_fly: KeyCode,
+    hit: MouseButton,
+    modify: MouseButton,
+}
+
+impl Default for KeyBindsConfig {
+    fn default() -> Self {
+        Self {
+            forward: KeyCode::KeyW,
+            backward: KeyCode::KeyS,
+            left: KeyCode::KeyA,
+            right: KeyCode::KeyD,
+            jump: KeyCode::Space,
+            crouch: KeyCode::ShiftLeft,
+            toggle_fly: KeyCode::F1,
+            hit: MouseButton::Left,
+            modify: MouseButton::Right,
+        }
+    }
+}
+
+fn configured_input_map() -> InputMap<PlayerInputAction> {
+    let cfg: KeyBindsConfig = confy::load_path("key_bindings.toml").unwrap_or_default();
+
+    let mut map = InputMap::default();
+    map.insert_dual_axis(
+        PlayerInputAction::Move,
+        VirtualDPad::new(cfg.forward, cfg.backward, cfg.left, cfg.right),
+    );
+    map.insert(PlayerInputAction::Jump, cfg.jump);
+    map.insert(PlayerInputAction::Crouch, cfg.crouch);
+    map.insert(PlayerInputAction::ToggleFly, cfg.toggle_fly);
+    map.insert(PlayerInputAction::Hit, cfg.hit);
+    map.insert(PlayerInputAction::Modify, cfg.modify);
+
+    // Keep sensible gamepad defaults alongside configurable keyboard/mouse.
+    map.insert_dual_axis(PlayerInputAction::Move, GamepadStick::LEFT);
+    map.insert(PlayerInputAction::Jump, GamepadButton::South);
+    map.insert(PlayerInputAction::Crouch, GamepadButton::East);
+    map.insert(PlayerInputAction::ToggleFly, GamepadButton::West);
+
+    map
+}
+
 pub fn spawn_player(mut commands: Commands) {
     let realm = Realm::Overworld;
     let mut inventory = new_inventory::<HOTBAR_SLOTS>();
@@ -62,7 +115,7 @@ pub fn spawn_player(mut commands: Commands) {
         .insert(SpatialListener::new(0.3))
         .insert((FootstepCD(0.), BlockSoundCD(0.)))
         // Leafwing bundle was removed; insert components directly
-        .insert(PlayerInputAction::default_input_map())
+        .insert(configured_input_map())
         .insert(ActionState::<PlayerInputAction>::default())
         .observe(on_item_get);
 }
