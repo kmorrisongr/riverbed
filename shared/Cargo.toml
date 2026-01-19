@@ -17,6 +17,7 @@ crossbeam = { workspace = true }
 hashbrown = { workspace = true }
 itertools = { workspace = true }
 json5 = { workspace = true }
+leafwing-input-manager = { workspace = true }
 lightyear = { workspace = true }
 packed-uints = { workspace = true }
 rand = { workspace = true }

@@ -2256,7 +2256,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "itertools 0.14.0",
  "json5",
- "leafwing-input-manager 0.18.0",
+ "leafwing-input-manager",
  "lightyear",
  "parking_lot",
  "rand 0.9.2",
@@ -4052,22 +4052,6 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "leafwing-input-manager"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "565d500780e26557b099b5f058d71c32ad6e92a7caac2cf4718d1078d97aa8b5"
-dependencies = [
- "bevy",
- "dyn-clone",
- "dyn-eq",
- "dyn-hash",
- "itertools 0.14.0",
- "leafwing_input_manager_macros",
- "serde",
- "serde_flexitos",
-]
-
-[[package]]
-name = "leafwing-input-manager"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7547ce653e70ffcd6cf1d040ada864e04d293167f237b32c6520ecbf18150b0a"
@@ -4386,7 +4370,7 @@ dependencies = [
  "bevy_platform",
  "bevy_reflect",
  "bevy_utils",
- "leafwing-input-manager 0.19.0",
+ "leafwing-input-manager",
  "lightyear_core",
  "lightyear_inputs",
  "serde",
@@ -6916,6 +6900,7 @@ dependencies = [
  "itertools 0.14.0",
  "json5",
  "lazy_static",
+ "leafwing-input-manager",
  "lightyear",
  "lz4",
  "packed-uints",
