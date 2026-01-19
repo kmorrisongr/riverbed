@@ -9,16 +9,16 @@ use bevy::prelude::*;
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender, TrySendError};
 use std::collections::{HashMap, HashSet};
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::thread::Builder;
 use std::sync::Arc;
+use std::thread::Builder;
 
 use crate::world::chunk::Chunk;
 use crate::world::pos::pos2d::chunks_in_col;
 use crate::world::pos::pos3d::ChunkPos;
 use crate::world::ColUnloadEvent;
 
-use super::chunk_collider::StaticChunkColliderBundle;
 use super::chunk_collider::generate_chunk_trimesh_collider;
+use super::chunk_collider::StaticChunkColliderBundle;
 
 /// Event requesting that a chunk's static physics collider be (re)generated.
 ///
@@ -128,7 +128,10 @@ fn setup_collider_worker(mut commands: Commands) {
                     let bundle = match cooked {
                         Ok(bundle) => bundle,
                         Err(_) => {
-                            warn!("Collider cook panicked for chunk {:?}; clearing in-flight", job.chunk_pos);
+                            warn!(
+                                "Collider cook panicked for chunk {:?}; clearing in-flight",
+                                job.chunk_pos
+                            );
                             None
                         }
                     };
@@ -196,15 +199,12 @@ pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
         *gen_entry += 1;
         let generation_value = *gen_entry;
 
-        match job_sender
-            .0
-            .try_send(ChunkColliderJob {
-                chunk_pos,
-                chunk,
-                lod,
-                generation: generation_value,
-            })
-        {
+        match job_sender.0.try_send(ChunkColliderJob {
+            chunk_pos,
+            chunk,
+            lod,
+            generation: generation_value,
+        }) {
             Ok(()) => {
                 pending.pending.remove(&chunk_pos);
                 in_flight.in_flight.insert(chunk_pos);

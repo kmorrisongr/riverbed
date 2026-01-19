@@ -3,8 +3,8 @@
 use avian3d::prelude::LinearVelocity;
 use bevy::prelude::*;
 
-use crate::{FLY_SPEED, FLY_VERTICAL_SPEED, WALK_SPEED};
 use crate::messages::{ActionMask, TransmittableAction};
+use crate::{FLY_SPEED, FLY_VERTICAL_SPEED, WALK_SPEED};
 
 // =============================================================================
 // Player Physics Constants
@@ -170,7 +170,6 @@ pub fn actions_to_camera_relative_input(
     inputs: &ActionMask,
     camera_transform: &Transform,
 ) -> MovementInput {
-
     let forward = camera_transform.forward().as_vec3();
     let right = camera_transform.right().as_vec3();
 

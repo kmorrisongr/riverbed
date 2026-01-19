@@ -64,9 +64,9 @@ pub fn collision_layers_for_realm(realm: Realm) -> CollisionLayers {
 pub use avian_physics::{
     actions_to_camera_relative_input, apply_movement_step_to_components, compute_desired_velocity,
     compute_movement_step_from_actions, DynamicPlayerPhysicsBundle, MovementInput, MovementMode,
-    MovementStepResult, SharedPhysicsWorldPlugin, AIR_FRICTION, GROUND_ACCELERATION, GROUND_FRICTION,
-    PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS, PLAYER_GRAVITY, PLAYER_JUMP_FORCE,
-    PLAYER_QUERY_BOUNDS,
+    MovementStepResult, SharedPhysicsWorldPlugin, AIR_FRICTION, GROUND_ACCELERATION,
+    GROUND_FRICTION, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS, PLAYER_GRAVITY,
+    PLAYER_JUMP_FORCE, PLAYER_QUERY_BOUNDS,
 };
 
 // Re-export ground detection from avian3d contacts

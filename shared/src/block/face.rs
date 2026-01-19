@@ -136,36 +136,21 @@ impl Face {
     #[inline]
     pub fn quad_vertices(&self, x: f32, y: f32, z: f32, w: f32, h: f32) -> [[f32; 3]; 4] {
         match self {
-            Face::Left => [
-                [x, y, z],
-                [x, y, z + h],
-                [x, y + w, z],
-                [x, y + w, z + h],
-            ],
+            Face::Left => [[x, y, z], [x, y, z + h], [x, y + w, z], [x, y + w, z + h]],
             Face::Right => [
                 [x + 1.0, y, z],
                 [x + 1.0, y + w, z],
                 [x + 1.0, y, z + h],
                 [x + 1.0, y + w, z + h],
             ],
-            Face::Down => [
-                [x, y, z],
-                [x + w, y, z],
-                [x, y, z + h],
-                [x + w, y, z + h],
-            ],
+            Face::Down => [[x, y, z], [x + w, y, z], [x, y, z + h], [x + w, y, z + h]],
             Face::Up => [
                 [x, y + 1.0, z],
                 [x, y + 1.0, z + h],
                 [x + w, y + 1.0, z],
                 [x + w, y + 1.0, z + h],
             ],
-            Face::Back => [
-                [x, y, z],
-                [x, y + h, z],
-                [x + w, y, z],
-                [x + w, y + h, z],
-            ],
+            Face::Back => [[x, y, z], [x, y + h, z], [x + w, y, z], [x + w, y + h, z]],
             Face::Front => [
                 [x, y, z + 1.0],
                 [x + w, y, z + 1.0],
@@ -193,39 +178,27 @@ impl Face {
             // Left face: normal should point -X
             // Vertices: [0,0,0], [0,0,h], [0,w,0], [0,w,h] (varying in Y and Z)
             // Triangle 0-1-2: edge01=(0,0,h), edge02=(0,w,0) → cross = (-wh, 0, 0) ✓ points -X
-            Face::Left => {
-                ([base, base + 1, base + 2], [base + 2, base + 1, base + 3])
-            }
+            Face::Left => ([base, base + 1, base + 2], [base + 2, base + 1, base + 3]),
             // Right face: normal should point +X
             // Vertices: [1,0,0], [1,w,0], [1,0,h], [1,w,h] (varying in Y and Z)
             // Triangle 0-1-2: edge01=(0,w,0), edge02=(0,0,h) → cross = (wh, 0, 0) ✓ points +X
-            Face::Right => {
-                ([base, base + 1, base + 2], [base + 2, base + 1, base + 3])
-            }
+            Face::Right => ([base, base + 1, base + 2], [base + 2, base + 1, base + 3]),
             // Down face: normal should point -Y
             // Vertices: [0,0,0], [w,0,0], [0,0,h], [w,0,h] (varying in X and Z)
             // Triangle 0-1-2: edge01=(w,0,0), edge02=(0,0,h) → cross = (0, -wh, 0) ✓ points -Y
-            Face::Down => {
-                ([base, base + 1, base + 2], [base + 2, base + 1, base + 3])
-            }
+            Face::Down => ([base, base + 1, base + 2], [base + 2, base + 1, base + 3]),
             // Up face: normal should point +Y
             // Vertices: [0,1,0], [0,1,h], [w,1,0], [w,1,h] (varying in X and Z)
             // Triangle 0-1-2: edge01=(0,0,h), edge02=(w,0,0) → cross = (0, wh, 0) ✓ points +Y
-            Face::Up => {
-                ([base, base + 1, base + 2], [base + 2, base + 1, base + 3])
-            }
+            Face::Up => ([base, base + 1, base + 2], [base + 2, base + 1, base + 3]),
             // Back face: normal should point -Z
             // Vertices: [0,0,0], [0,h,0], [w,0,0], [w,h,0] (varying in X and Y)
             // Triangle 0-1-2: edge01=(0,h,0), edge02=(w,0,0) → cross = (0, 0, -wh) ✓ points -Z
-            Face::Back => {
-                ([base, base + 1, base + 2], [base + 2, base + 1, base + 3])
-            }
+            Face::Back => ([base, base + 1, base + 2], [base + 2, base + 1, base + 3]),
             // Front face: normal should point +Z
             // Vertices: [0,0,1], [w,0,1], [0,h,1], [w,h,1] (varying in X and Y)
             // Triangle 0-1-2: edge01=(w,0,0), edge02=(0,h,0) → cross = (0, 0, wh) ✓ points +Z
-            Face::Front => {
-                ([base, base + 1, base + 2], [base + 2, base + 1, base + 3])
-            }
+            Face::Front => ([base, base + 1, base + 2], [base + 2, base + 1, base + 3]),
         }
     }
 }

@@ -71,10 +71,13 @@ pub fn setup_mesh_thread(
                 mesh_orders.remove(i);
                 mesh_cache.remove(&chunk_pos);
                 let lod = choose_lod_level(dist as u32);
-                
+
                 // Clone the Arc<Chunk> - this is O(1), just an atomic increment.
                 // The chunk data itself is not copied.
-                let Some(chunk_arc) = chunks.get(&chunk_pos).map(|e| Arc::clone(&*e.value().read())) else {
+                let Some(chunk_arc) = chunks
+                    .get(&chunk_pos)
+                    .map(|e| Arc::clone(&*e.value().read()))
+                else {
                     continue;
                 };
 
@@ -86,7 +89,10 @@ pub fn setup_mesh_thread(
                 let face_meshes = match meshed {
                     Ok(meshes) => meshes,
                     Err(_) => {
-                        warn!("Mesh generation panicked for chunk {:?}; skipping", chunk_pos);
+                        warn!(
+                            "Mesh generation panicked for chunk {:?}; skipping",
+                            chunk_pos
+                        );
                         continue;
                     }
                 };

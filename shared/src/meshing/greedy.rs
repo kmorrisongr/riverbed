@@ -105,7 +105,10 @@ pub fn extract_quads(chunk: &Chunk, lod: usize) -> ChunkQuads {
         if *voxel == 0 {
             continue;
         }
-        let (col, bit) = (i / bgm::Mesher::<CHUNK_S1>::CS_P, i % bgm::Mesher::<CHUNK_S1>::CS_P);
+        let (col, bit) = (
+            i / bgm::Mesher::<CHUNK_S1>::CS_P,
+            i % bgm::Mesher::<CHUNK_S1>::CS_P,
+        );
         if is_transparent[*voxel as usize] {
             trans_mask[col] |= 1 << bit;
         } else {

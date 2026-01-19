@@ -14,7 +14,8 @@ use shared::messages::{
 };
 use shared::net::clock;
 use shared::physics::{
-    update_ground_state_system, update_stepped_block_system, DynamicPlayerPhysicsBundle, MovementMode,
+    update_ground_state_system, update_stepped_block_system, DynamicPlayerPhysicsBundle,
+    MovementMode,
 };
 use shared::world::realm::Realm;
 use shared::world::WorldSeed;

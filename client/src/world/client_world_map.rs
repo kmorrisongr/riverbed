@@ -25,7 +25,7 @@ use shared::{
             pos3d::{BlockPos, ChunkPos, ChunkedPos},
             PlayerCol,
         },
-        ColumnUnloader, BlockAccess, MAX_HEIGHT, Y_CHUNKS, unload_column,
+        unload_column, BlockAccess, ColumnUnloader, MAX_HEIGHT, Y_CHUNKS,
     },
 };
 use std::sync::Arc;
@@ -91,7 +91,9 @@ impl ClientWorldMap {
     /// Get a clone of the Arc<Chunk> for a given position.
     /// This is O(1) - just an atomic reference count increment.
     pub fn get_chunk_arc(&self, pos: ChunkPos) -> Option<Arc<Chunk>> {
-        self.chunks.get(&pos).map(|c| Arc::clone(&*c.value().read()))
+        self.chunks
+            .get(&pos)
+            .map(|c| Arc::clone(&*c.value().read()))
     }
 
     /// Unload all chunks in a column
@@ -253,7 +255,7 @@ fn process_block_requests(
             new_chunk.set(chunked_pos, request.block);
             *lock = Arc::new(new_chunk);
             drop(lock);
-            
+
             world_map.mark_chunk_changed(chunk_pos);
 
             block_changed.write(BlockChanged {

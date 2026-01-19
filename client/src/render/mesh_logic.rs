@@ -54,59 +54,55 @@ pub fn create_face_meshes(
     let chunk_quads = extract_quads(chunk, lod);
     mesh_data_span.exit();
 
-        let mesh_build_span = info_span!("mesh build", name = "mesh build").entered();
-        let mut meshes = core::array::from_fn(|_| None);
+    let mesh_build_span = info_span!("mesh build", name = "mesh build").entered();
+    let mut meshes = core::array::from_fn(|_| None);
 
-        for (face_n, quads) in chunk_quads.faces.iter().enumerate() {
-            let mut voxel_data: Vec<[u32; 2]> = Vec::with_capacity(quads.len() * 4);
-            let face: Face = face_n.into();
-            let mut kept_quads = 0;
+    for (face_n, quads) in chunk_quads.faces.iter().enumerate() {
+        let mut voxel_data: Vec<[u32; 2]> = Vec::with_capacity(quads.len() * 4);
+        let face: Face = face_n.into();
+        let mut kept_quads = 0;
 
-            for quad in quads {
-                kept_quads += 1;
-                let layer = texture_map.get_texture_index(quad.block, face) as u32;
+        for quad in quads {
+            kept_quads += 1;
+            let layer = texture_map.get_texture_index(quad.block, face) as u32;
 
-                // Calculate color based on block type and underwater depth
-                let (mut r, mut g, mut b) = match (quad.block, face) {
-                    (Block::GrassBlock, Face::Up) => (0.1, 0.9, 0.2),
-                    (Block::SeaBlock, _) => (0.1, 0.3, 0.7),
-                    (block, _) if block.is_foliage() => (0.1, 0.8, 0.1),
-                    _ => (1., 1., 1.),
-                };
+            // Calculate color based on block type and underwater depth
+            let (mut r, mut g, mut b) = match (quad.block, face) {
+                (Block::GrassBlock, Face::Up) => (0.1, 0.9, 0.2),
+                (Block::SeaBlock, _) => (0.1, 0.3, 0.7),
+                (block, _) if block.is_foliage() => (0.1, 0.8, 0.1),
+                _ => (1., 1., 1.),
+            };
 
-                if quad.neighbor_block == Block::SeaBlock {
-                    let dist_to_surface = (WATER_H as usize - cy - quad.y() as usize) as f32;
-                    r *= (-dist_to_surface * 0.05).exp();
-                    g *= (-dist_to_surface * 0.045).exp();
-                    b *= (-dist_to_surface * 0.04).exp();
-                }
-
-                let vertices = face.vertices_packed(
-                    quad.xyz,
-                    quad.width as u32,
-                    quad.height as u32,
-                    lod as u32,
-                );
-                let quad_info = (color(r, g, b) << 15) | (layer << 3) | face_n as u32;
-                voxel_data.extend_from_slice(&[
-                    [vertices[0], quad_info],
-                    [vertices[1], quad_info],
-                    [vertices[2], quad_info],
-                    [vertices[3], quad_info],
-                ]);
+            if quad.neighbor_block == Block::SeaBlock {
+                let dist_to_surface = (WATER_H as usize - cy - quad.y() as usize) as f32;
+                r *= (-dist_to_surface * 0.05).exp();
+                g *= (-dist_to_surface * 0.045).exp();
+                b *= (-dist_to_surface * 0.04).exp();
             }
 
-            let indices = bgm::indices(kept_quads);
-            meshes[face_n] = Some(
-                Mesh::new(
-                    PrimitiveTopology::TriangleList,
-                    RenderAssetUsages::RENDER_WORLD,
-                )
-                .with_inserted_attribute(ATTRIBUTE_VOXEL_DATA, voxel_data)
-                .with_inserted_indices(Indices::U32(indices)),
-            )
+            let vertices =
+                face.vertices_packed(quad.xyz, quad.width as u32, quad.height as u32, lod as u32);
+            let quad_info = (color(r, g, b) << 15) | (layer << 3) | face_n as u32;
+            voxel_data.extend_from_slice(&[
+                [vertices[0], quad_info],
+                [vertices[1], quad_info],
+                [vertices[2], quad_info],
+                [vertices[3], quad_info],
+            ]);
         }
 
-        mesh_build_span.exit();
-        meshes
+        let indices = bgm::indices(kept_quads);
+        meshes[face_n] = Some(
+            Mesh::new(
+                PrimitiveTopology::TriangleList,
+                RenderAssetUsages::RENDER_WORLD,
+            )
+            .with_inserted_attribute(ATTRIBUTE_VOXEL_DATA, voxel_data)
+            .with_inserted_indices(Indices::U32(indices)),
+        )
     }
+
+    mesh_build_span.exit();
+    meshes
+}
