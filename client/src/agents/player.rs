@@ -12,6 +12,7 @@ use shared::{
 };
 
 use super::{block_action::BlockActionPlugin, key_binds::KeyBinds, Crouching};
+use shared::net::lightyear_inputs::{PlayerInputAction};
 pub const HOTBAR_SLOTS: usize = 8;
 
 pub struct PlayerPlugin;
@@ -25,6 +26,7 @@ impl Plugin for PlayerPlugin {
             .add_plugins(BlockActionPlugin)
             // Action (Hit/Modify) is used for block interactions
             .add_plugins(InputManagerPlugin::<Action>::default())
+            .add_plugins(InputManagerPlugin::<PlayerInputAction>::default())
             .add_systems(
                 Startup,
                 (spawn_player, ApplyDeferred).chain().in_set(PlayerSpawn),
@@ -73,6 +75,9 @@ pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
             (Action::Hit, key_binds.hit),
             (Action::Modify, key_binds.modify),
         ]))
+        // Leafwing bundle was removed; insert components directly
+        .insert(PlayerInputAction::default_input_map())
+        .insert(ActionState::<PlayerInputAction>::default())
         .observe(on_item_get);
 }
 

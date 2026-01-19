@@ -3,15 +3,16 @@ use bevy_renet::renet::RenetClient;
 use shared::messages::ClientToServerMessage;
 use shared::physics::LinearVelocity;
 
-use crate::agents::key_binds::KeyBinds;
 use crate::agents::PlayerControlled;
 use crate::network::TargetServerState;
 use crate::render::FpsCam;
 use crate::ui::SelectedHotbarSlot;
+use shared::net::lightyear_inputs::{action_mask_from_leafwing, PlayerInputAction};
 
 use super::buffered_client::{CurrentFrameInputs, CurrentFrameInputsExt, SyncTime, SyncTimeExt};
 use super::SendGameMessageExtension;
 use shared::net::input_history::InputHistory;
+use leafwing_input_manager::prelude::ActionState;
 
 pub fn pre_input_update_system(
     mut frame_inputs: ResMut<CurrentFrameInputs>,
@@ -27,36 +28,18 @@ pub fn pre_input_update_system(
 }
 
 pub fn capture_player_inputs_system(
-    key_binds: Res<KeyBinds>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mouse: Res<ButtonInput<MouseButton>>,
+    player_actions: Query<&ActionState<PlayerInputAction>, With<PlayerControlled>>,
     mut frame_inputs: ResMut<CurrentFrameInputs>,
 ) {
     if frame_inputs.0.delta_ms == 0 {
         return;
     }
 
-    // Capture continuous actions (movement) - these fire every frame while held
-    for keycode in keyboard.get_pressed() {
-        if let Some(action) = key_binds.keycode_to_continuous_action(*keycode) {
-            frame_inputs.0.inputs.insert(action);
-        }
-    }
+    let Ok(action_state) = player_actions.single() else {
+        return;
+    };
 
-    for button in mouse.get_pressed() {
-        if let Some(action) = key_binds.mousebutton_to_action(*button) {
-            frame_inputs.0.inputs.insert(action);
-        }
-    }
-
-    // Capture one-shot actions (toggles) - these fire only on the frame the key is pressed
-    // This prevents toggle actions from being added to multiple frames when the key is held,
-    // which would cause them to toggle back and forth during input replay/reconciliation.
-    for keycode in keyboard.get_just_pressed() {
-        if let Some(action) = key_binds.keycode_to_oneshot_action(*keycode) {
-            frame_inputs.0.inputs.insert(action);
-        }
-    }
+    frame_inputs.0.inputs = action_mask_from_leafwing(action_state);
 }
 
 pub fn update_frame_inputs_system(

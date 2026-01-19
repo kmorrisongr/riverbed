@@ -7,7 +7,7 @@ use crate::messages::{ActionMask, TransmittableAction};
 /// We keep the surface area aligned with the existing `TransmittableAction`
 /// bits so current movement/block interactions can be driven from a single
 /// source of truth.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Reflect)]
+#[derive(Actionlike, Clone, Copy, PartialEq, Eq, Hash, Debug, Reflect)]
 pub enum PlayerInputAction {
     Move,
     Jump,
@@ -34,15 +34,6 @@ impl PlayerInputAction {
             // Interactions
             .with(Self::Hit, MouseButton::Left)
             .with(Self::Modify, MouseButton::Right)
-    }
-}
-
-impl Actionlike for PlayerInputAction {
-    fn input_control_kind(&self) -> InputControlKind {
-        match self {
-            PlayerInputAction::Move => InputControlKind::DualAxis,
-            _ => InputControlKind::Button,
-        }
     }
 }
 
