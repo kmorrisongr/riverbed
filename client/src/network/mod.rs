@@ -1,11 +1,9 @@
 pub mod buffered_client;
 pub mod lightyear_client;
 pub mod models;
-pub mod reconciliation;
 mod setup;
 
 pub use lightyear_client::LightyearClientPlugin;
-pub use reconciliation::ServerAuthorityReconciliationPlugin;
 pub use setup::*;
 
 use bevy::prelude::*;

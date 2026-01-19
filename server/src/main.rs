@@ -1,9 +1,9 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use bevy::log::info;
 use bevy::prelude::*;
 use clap::Parser;
-use server::network::lightyear_server::LightyearServerPlugin;
+use server::network::lightyear_server::{LightyearServerConfig, LightyearServerPlugin};
 use shared::{GameServerConfig, RENDER_DISTANCE};
 
 mod generation;
@@ -34,42 +34,24 @@ fn main() {
         std::process::exit(1);
     }
 
-    // Bind UDP socket
-    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), args.port);
-    let socket = match UdpSocket::bind(addr) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Failed to bind socket on port {}: {}", args.port, e);
-            std::process::exit(1);
-        }
-    };
-
-    let (server, transport, local_addr) = match init::setup_netcode(socket) {
-        Ok(data) => data,
-        Err(err) => {
-            eprintln!("Failed to setup server netcode: {err}");
-            std::process::exit(1);
-        }
-    };
-
-    info!("Server starting on {}", local_addr);
+    let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), args.port);
+    info!("Server starting on {}", bind_addr);
 
     let mut app = App::new();
 
-    init::configure_server_app(
-        &mut app,
-        server,
-        transport,
-        init::ServerInitConfig {
-            game_config: GameServerConfig {
-                world_name: args.world,
-                is_solo: false,
-                broadcast_render_distance: args.render_distance,
-            },
-            add_log_plugin: true,    // Standalone server needs its own logging
-            add_log_broadcast: true, // Broadcast log events to clients
+    init::configure_server_app(&mut app, init::ServerInitConfig {
+        game_config: GameServerConfig {
+            world_name: args.world,
+            is_solo: false,
+            broadcast_render_distance: args.render_distance,
         },
-    );
+        add_log_plugin: true, // Standalone server needs its own logging
+    });
+
+    app.insert_resource(LightyearServerConfig {
+        bind_addr,
+        ..Default::default()
+    });
 
     app.add_plugins(LightyearServerPlugin);
 

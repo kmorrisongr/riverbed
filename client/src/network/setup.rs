@@ -99,20 +99,12 @@ pub fn launch_local_server_system(
     if let Some(world_name) = &selected_world.name {
         info!("Launching local server with world: {}", world_name);
 
-        let socket = match server::acquire_local_ephemeral_udp_socket(IpAddr::V4(Ipv4Addr::new(
+        let address = match server::acquire_local_ephemeral_udp_socket(IpAddr::V4(Ipv4Addr::new(
             127, 0, 0, 1,
         ))) {
-            Ok(socket) => socket,
-            Err(err) => {
-                error!("{}: {err}", SOCKET_BIND_ERROR);
-                return;
-            }
-        };
-
-        let address = match socket.local_addr() {
             Ok(address) => address,
             Err(err) => {
-                error!("Failed to get socket local address: {err}");
+                error!("{}: {err}", SOCKET_BIND_ERROR);
                 return;
             }
         };
@@ -122,7 +114,7 @@ pub fn launch_local_server_system(
 
         thread::spawn(move || {
             server::init(
-                socket,
+                address,
                 GameServerConfig {
                     world_name: world_name_clone,
                     is_solo: true,

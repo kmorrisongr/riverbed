@@ -1,13 +1,13 @@
 use crate::{
     generation::TerrainGenerator,
     logging::{LogEventSender, LogEventSenderExt},
-    network::players::ClientReportedPredictedPosition,
     world::voxel_world::VoxelWorld,
 };
 use bevy::prelude::*;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use shared::{
     logging::logging::LogData,
+    physics::Position,
     world::{
         pos::{pos2d::ColPos, PlayerCol},
         realm::Realm,
@@ -128,11 +128,10 @@ pub fn assign_player_col(
     mut commands: Commands,
     sender: Res<PlayerColumnUpdateSender>,
     log_sender: Res<LogEventSender>,
-    player_query: Query<(Entity, &ClientReportedPredictedPosition, &Realm), Without<PlayerCol>>,
+    player_query: Query<(Entity, &Position, &Realm), Without<PlayerCol>>,
 ) {
-    for (player, predicted_pos, realm) in player_query.iter() {
-        // Use client's predicted position for terrain generation
-        let col = ColPos::from((predicted_pos.0, *realm));
+    for (player, position, realm) in player_query.iter() {
+        let col = ColPos::from((position.0, *realm));
         commands.entity(player).insert(PlayerCol(col));
         let update = PlayerColumnUpdate {
             id: player.index(),
@@ -154,14 +153,13 @@ pub fn send_player_pos_update(
     log_sender: Res<LogEventSender>,
     mut player_query: Query<(
         Entity,
-        &ClientReportedPredictedPosition,
+        &Position,
         &Realm,
         &mut PlayerCol,
     )>,
 ) {
-    for (player, predicted_pos, realm, mut player_col) in player_query.iter_mut() {
-        // Use client's predicted position for terrain generation
-        let new_col = ColPos::from((predicted_pos.0, *realm));
+    for (player, position, realm, mut player_col) in player_query.iter_mut() {
+        let new_col = ColPos::from((position.0, *realm));
         if player_col.0 != new_col {
             // send the update only if the column has changed
             let update = PlayerColumnUpdate {

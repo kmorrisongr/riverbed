@@ -9,19 +9,19 @@ mod logging;
 pub mod network;
 pub mod world;
 
-use std::net::{IpAddr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, SocketAddr};
 
-use bevy::log::{error, info};
+use bevy::log::info;
 use bevy::prelude::*;
+use network::lightyear_server::{LightyearServerConfig, LightyearServerPlugin};
 use shared::GameServerConfig;
 
-pub use init::{setup_netcode, NetcodeSetupError};
-
-/// Acquires a UDP socket bound to an ephemeral port on the given IP address.
-/// Used by the client to create a socket for the local server.
-pub fn acquire_local_ephemeral_udp_socket(ip: IpAddr) -> std::io::Result<UdpSocket> {
+/// Acquires an available ephemeral socket address on the given IP.
+/// Used by the client to pick a bind address for the local server.
+pub fn acquire_local_ephemeral_udp_socket(ip: IpAddr) -> std::io::Result<SocketAddr> {
     let addr = SocketAddr::new(ip, 0); // Port 0 = ephemeral port
-    UdpSocket::bind(addr)
+    let socket = std::net::UdpSocket::bind(addr)?;
+    socket.local_addr()
 }
 
 /// Initialize and run the server with the given configuration.
@@ -30,7 +30,7 @@ pub fn acquire_local_ephemeral_udp_socket(ip: IpAddr) -> std::io::Result<UdpSock
 /// It's designed to be called from a separate thread when running in singleplayer mode.
 ///
 /// # Arguments
-/// * `socket` - A pre-bound UDP socket for the server to use
+/// * `bind_addr` - Address for Lightyear to bind
 /// * `config` - Server configuration including world name and settings
 ///
 /// # Example
@@ -38,42 +38,34 @@ pub fn acquire_local_ephemeral_udp_socket(ip: IpAddr) -> std::io::Result<UdpSock
 /// use std::thread;
 /// use std::net::{IpAddr, Ipv4Addr};
 ///
-/// let socket = server::acquire_local_ephemeral_udp_socket(
+/// let addr = server::acquire_local_ephemeral_udp_socket(
 ///     IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))
 /// ).unwrap();
-/// let addr = socket.local_addr().unwrap();
 ///
 /// thread::spawn(move || {
-///     server::init(socket, GameServerConfig {
+///     server::init(addr, GameServerConfig {
 ///         world_name: "my_world".to_string(),
 ///         is_solo: true,
 ///         broadcast_render_distance: 8,
 ///     });
 /// });
 /// ```
-pub fn init(socket: UdpSocket, config: GameServerConfig) {
-    let (server, transport, addr) = match setup_netcode(socket) {
-        Ok(data) => data,
-        Err(err) => {
-            error!("Failed to setup server netcode: {err}");
-            return;
-        }
-    };
-
-    info!("Server starting on {}", addr);
+pub fn init(bind_addr: SocketAddr, config: GameServerConfig) {
+    info!("Server starting on {}", bind_addr);
 
     let mut app = App::new();
 
-    init::configure_server_app(
-        &mut app,
-        server,
-        transport,
-        init::ServerInitConfig {
-            game_config: config,
-            add_log_plugin: false,    // Client already has logging configured
-            add_log_broadcast: false, // Not needed for embedded server
-        },
-    );
+    init::configure_server_app(&mut app, init::ServerInitConfig {
+        game_config: config,
+        add_log_plugin: false, // Client already has logging configured
+    });
+
+    app.insert_resource(LightyearServerConfig {
+        bind_addr,
+        ..Default::default()
+    });
+
+    app.add_plugins(LightyearServerPlugin);
 
     info!("Server entering main loop");
     app.run();

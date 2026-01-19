@@ -17,7 +17,6 @@ use lightyear::prelude::*;
 use shared::block::Block;
 use shared::items::{new_inventory, InventoryTrait, Item, Stack};
 use shared::items::item_slots::ItemHolder;
-use shared::messages::ActionMask;
 use shared::net::lightyear_inputs::{action_mask_from_leafwing, PlayerInputAction};
 use shared::net::lightyear_protocol::{
     CameraOrientation, CharacterMarker, LightyearProtocolPlugin, PlayerColor, SelectedHotbarSlot,
@@ -43,7 +42,6 @@ pub struct LightyearServerConfig {
     pub bind_addr: SocketAddr,
     pub protocol_id: u64,
     pub private_key: [u8; PRIVATE_KEY_BYTES],
-    pub max_clients: usize,
     pub keep_alive_hz: f64,
     pub client_timeout_secs: i32,
     pub num_disconnect_packets: usize,
@@ -55,18 +53,11 @@ impl Default for LightyearServerConfig {
             bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 5000),
             protocol_id: PROTOCOL_ID,
             private_key: LIGHTYEAR_DEV_PRIVATE_KEY,
-            max_clients: 64,
             keep_alive_hz: 10.0,
             client_timeout_secs: 10,
             num_disconnect_packets: 10,
         }
     }
-}
-
-/// Latest inputs received from clients (placeholder until Lightyear transport is wired).
-#[derive(Resource, Default, Debug, Clone)]
-pub struct LightyearServerInbox {
-    pub pending: Vec<(PeerId, u64, ActionMask)>,
 }
 
 pub struct LightyearServerPlugin;
@@ -91,7 +82,6 @@ impl Plugin for LightyearServerPlugin {
         app.add_plugins(shared::net::LightyearPhysicsPlugin);
 
         app.init_resource::<LightyearServerConfig>()
-            .init_resource::<LightyearServerInbox>()
             .add_systems(Startup, spawn_lightyear_server)
             // Apply character actions from replicated inputs.
             .add_systems(FixedUpdate, handle_character_actions)
