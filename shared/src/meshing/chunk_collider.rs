@@ -12,6 +12,7 @@
 
 use avian3d::prelude::*;
 use bevy::prelude::*;
+use std::collections::HashMap;
 
 use crate::block::Face;
 use crate::meshing::{extract_quads, ChunkQuads};
@@ -100,16 +101,18 @@ pub fn generate_chunk_trimesh_collider(chunk: &Chunk) -> Option<Collider> {
 ///
 /// Each quad becomes two triangles (6 indices).
 fn quads_to_trimesh(quads: &ChunkQuads) -> (Vec<Vec3>, Vec<[u32; 3]>) {
+    const ENABLE_COLLIDER_VERTEX_DEDUPE: bool = true;
+
     let total_quads = quads.total_quads();
     let mut vertices = Vec::with_capacity(total_quads * 4);
     let mut indices = Vec::with_capacity(total_quads * 2);
+    let mut vertex_lookup: Option<HashMap<(i32, i32, i32), u32>> =
+        ENABLE_COLLIDER_VERTEX_DEDUPE.then(HashMap::new);
 
     for (face_n, face_quads) in quads.faces.iter().enumerate() {
         let face: Face = face_n.into();
 
         for quad in face_quads {
-            let base_vertex = vertices.len() as u32;
-
             // Get the 4 corners of the quad in world space
             let quad_vertices = face_quad_vertices(
                 face,
@@ -120,11 +123,27 @@ fn quads_to_trimesh(quads: &ChunkQuads) -> (Vec<Vec3>, Vec<[u32; 3]>) {
                 quad.height as f32,
             );
 
-            vertices.extend_from_slice(&quad_vertices);
+            let mut quad_indices = [0u32; 4];
+
+            if let Some(map) = vertex_lookup.as_mut() {
+                for (i, v) in quad_vertices.into_iter().enumerate() {
+                    let key = (v.x as i32, v.y as i32, v.z as i32);
+                    let idx = *map.entry(key).or_insert_with(|| {
+                        let new_idx = vertices.len() as u32;
+                        vertices.push(v);
+                        new_idx
+                    });
+                    quad_indices[i] = idx;
+                }
+            } else {
+                let base = vertices.len() as u32;
+                vertices.extend_from_slice(&quad_vertices);
+                quad_indices = [base, base + 1, base + 2, base + 3];
+            }
 
             // Two triangles per quad (winding order for correct normals)
             // The winding order depends on the face direction
-            let (tri1, tri2) = face_triangle_indices(face, base_vertex);
+            let (tri1, tri2) = face_triangle_indices(face, quad_indices);
             indices.push(tri1);
             indices.push(tri2);
         }
@@ -180,16 +199,12 @@ fn face_quad_vertices(face: Face, x: f32, y: f32, z: f32, w: f32, h: f32) -> [Ve
 /// Get triangle indices for a quad with correct winding order.
 ///
 /// The winding order is set so that the normal points outward from the solid block.
-fn face_triangle_indices(face: Face, base: u32) -> ([u32; 3], [u32; 3]) {
+fn face_triangle_indices(face: Face, idx: [u32; 4]) -> ([u32; 3], [u32; 3]) {
     match face {
         // Outward-facing normals (counter-clockwise when viewed from outside)
-        Face::Right | Face::Up | Face::Front => {
-            ([base, base + 1, base + 2], [base + 2, base + 1, base + 3])
-        }
+        Face::Right | Face::Up | Face::Front => ([idx[0], idx[1], idx[2]], [idx[2], idx[1], idx[3]]),
         // Inward-facing normals need opposite winding
-        Face::Left | Face::Down | Face::Back => {
-            ([base, base + 2, base + 1], [base + 2, base + 3, base + 1])
-        }
+        Face::Left | Face::Down | Face::Back => ([idx[0], idx[2], idx[1]], [idx[2], idx[3], idx[1]]),
     }
 }
 
