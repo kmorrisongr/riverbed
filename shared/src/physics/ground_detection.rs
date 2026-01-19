@@ -131,14 +131,6 @@ pub fn check_grounded_from_collisions(collisions: &Collisions, entity: Entity) -
     false
 }
 
-// =============================================================================
-// Generic Systems for Ground State Updates
-// =============================================================================
-// These systems can be used by both client and server by specifying the
-// appropriate marker component (e.g., PlayerControlled on client, NetworkPlayer
-// on server).
-// =============================================================================
-
 /// Syncs the `Grounded` component from avian3d collision contacts.
 ///
 /// This system queries all entities with the given marker component `M` and

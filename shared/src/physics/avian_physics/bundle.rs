@@ -18,7 +18,6 @@ use crate::world::realm::Realm;
 /// ensuring consistent physics behavior across the network.
 #[derive(Bundle)]
 pub struct DynamicPlayerPhysicsBundle {
-    // Avian3d physics components
     pub rigid_body: RigidBody,
     pub collider: Collider,
     pub linear_velocity: LinearVelocity,
@@ -31,7 +30,6 @@ pub struct DynamicPlayerPhysicsBundle {
     pub position: Position,
     pub rotation: Rotation,
     pub collision_layers: CollisionLayers,
-    // Movement state components (shared with ground detection systems)
     pub movement_mode: MovementMode,
     pub grounded: Grounded,
     pub block_beneath_feet: BlockBeneathFeet,

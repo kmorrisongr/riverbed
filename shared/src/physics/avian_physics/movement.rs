@@ -6,10 +6,6 @@ use bevy::prelude::*;
 use crate::messages::{ActionMask, TransmittableAction};
 use crate::{FLY_SPEED, FLY_VERTICAL_SPEED, WALK_SPEED};
 
-// =============================================================================
-// Player Physics Constants
-// =============================================================================
-
 /// Gravitational acceleration for players (units/s²).
 /// Higher values = faster falling.
 pub const PLAYER_GRAVITY: f32 = 50.0;
@@ -63,15 +59,10 @@ impl MovementMode {
 /// Input state for a single physics tick.
 #[derive(Debug, Clone, Default)]
 pub struct MovementInput {
-    /// Raw horizontal input axes (not yet normalized), relative to camera
     pub input_axes: Vec3,
-    /// Whether the jump/fly-up input is pressed
     pub jump: bool,
-    /// Whether the crouch/fly-down input is pressed
     pub crouch: bool,
-    /// Camera forward direction (for movement orientation)
     pub camera_forward: Vec3,
-    /// Camera right direction (for movement orientation)
     pub camera_right: Vec3,
 }
 
@@ -82,12 +73,8 @@ pub struct MovementInput {
 /// to ensure identical movement logic.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct MovementStepResult {
-    /// The computed desired velocity (avian3d will apply this and resolve collisions)
     pub velocity: Vec3,
-    /// Whether the player was on ground this frame (passed through from input state,
-    /// used by callers for sound/visual effects - not modified by velocity computation)
     pub on_ground: bool,
-    /// The current movement mode (may change if fly toggle was pressed)
     pub movement_mode: MovementMode,
 }
 
@@ -205,7 +192,6 @@ pub fn player_actions_to_movement_input(
     }
 }
 
-/// Compute desired velocity from player actions (including fly toggle).
 pub fn compute_velocity_from_player_actions(
     velocity: Vec3,
     mut movement_mode: MovementMode,
@@ -246,10 +232,6 @@ pub fn compute_velocity_from_player_actions(
     }
 }
 
-/// Applies player input to physics components and returns the computed result.
-///
-/// This is the primary entry point for movement processing on both client and server.
-/// It computes the desired velocity, updates the ECS components, and returns the result.
 pub fn apply_player_input_to_physics(
     linear_velocity: &mut LinearVelocity,
     movement_mode: &mut MovementMode,
