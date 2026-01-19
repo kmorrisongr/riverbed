@@ -103,10 +103,11 @@ fn spawn_lightyear_client(
         return;
     }
 
-    let server_addr = target_server
-        .as_ref()
-        .and_then(|t| t.address)
-        .unwrap_or(config.server_addr);
+    // Wait until a target server address is known (local or external) to avoid
+    // attempting a connection to the default and timing out.
+    let Some(server_addr) = target_server.as_ref().and_then(|t| t.address) else {
+        return;
+    };
     let client_id = player_profile
         .as_ref()
         .map(|p| p.id)
