@@ -15,7 +15,7 @@ use crate::{FLY_SPEED, FLY_VERTICAL_SPEED, WALK_SPEED};
 pub const PLAYER_GRAVITY: f32 = 50.0;
 
 /// Instantaneous vertical velocity applied when jumping (units/s).
-pub const PLAYER_JUMP_FORCE: f32 = 13.0;
+pub const PLAYER_JUMP_VELOCITY: f32 = 13.0;
 
 /// Radius of the player's capsule collider (meters).
 pub const PLAYER_CAPSULE_RADIUS: f32 = 0.3;
@@ -95,7 +95,7 @@ pub struct MovementStepResult {
 ///
 /// This implements "custom kinematics" - we compute what velocity we want,
 /// and avian3d handles collision resolution against chunk colliders.
-pub fn compute_desired_velocity(
+pub fn compute_player_desired_velocity(
     velocity: Vec3,
     movement_mode: MovementMode,
     on_ground: bool,
@@ -134,7 +134,7 @@ pub fn compute_desired_velocity(
         MovementMode::Walking => {
             // Handle jumping (apply impulse if grounded)
             if input.jump && on_ground {
-                velocity.y = PLAYER_JUMP_FORCE;
+                velocity.y = PLAYER_JUMP_VELOCITY;
             }
 
             // Use ground or air friction based on contact state
@@ -165,9 +165,9 @@ pub fn compute_desired_velocity(
     }
 }
 
-/// Convert transmittable actions to camera-relative movement input.
-pub fn actions_to_camera_relative_input(
-    inputs: &ActionMask,
+/// Convert player action flags to camera-relative movement input.
+pub fn player_actions_to_movement_input(
+    actions: &ActionMask,
     camera_transform: &Transform,
 ) -> MovementInput {
     let forward = camera_transform.forward().as_vec3();
@@ -177,22 +177,22 @@ pub fn actions_to_camera_relative_input(
     let mut jump = false;
     let mut crouch = false;
 
-    if inputs.contains(TransmittableAction::MoveForward) {
+    if actions.contains(TransmittableAction::MoveForward) {
         input_axes.z += 1.0;
     }
-    if inputs.contains(TransmittableAction::MoveBackward) {
+    if actions.contains(TransmittableAction::MoveBackward) {
         input_axes.z -= 1.0;
     }
-    if inputs.contains(TransmittableAction::MoveRight) {
+    if actions.contains(TransmittableAction::MoveRight) {
         input_axes.x += 1.0;
     }
-    if inputs.contains(TransmittableAction::MoveLeft) {
+    if actions.contains(TransmittableAction::MoveLeft) {
         input_axes.x -= 1.0;
     }
-    if inputs.contains(TransmittableAction::JumpOrFlyUp) {
+    if actions.contains(TransmittableAction::JumpOrFlyUp) {
         jump = true;
     }
-    if inputs.contains(TransmittableAction::CrouchOrFlyDown) {
+    if actions.contains(TransmittableAction::CrouchOrFlyDown) {
         crouch = true;
     }
 
@@ -205,8 +205,8 @@ pub fn actions_to_camera_relative_input(
     }
 }
 
-/// Apply movement actions (including fly toggle) and compute desired velocity.
-pub fn compute_movement_step_from_actions(
+/// Compute desired velocity from player actions (including fly toggle).
+pub fn compute_velocity_from_player_actions(
     velocity: Vec3,
     mut movement_mode: MovementMode,
     on_ground: bool,
@@ -229,9 +229,9 @@ pub fn compute_movement_step_from_actions(
         }
     }
 
-    let movement_input = actions_to_camera_relative_input(actions, camera);
+    let movement_input = player_actions_to_movement_input(actions, camera);
 
-    let new_velocity = compute_desired_velocity(
+    let new_velocity = compute_player_desired_velocity(
         current_velocity,
         movement_mode,
         on_ground,
@@ -246,11 +246,11 @@ pub fn compute_movement_step_from_actions(
     }
 }
 
-/// Shared helper that applies a single input frame directly to ECS components.
+/// Applies player input to physics components and returns the computed result.
 ///
 /// This is the primary entry point for movement processing on both client and server.
 /// It computes the desired velocity, updates the ECS components, and returns the result.
-pub fn apply_movement_step_to_components(
+pub fn apply_player_input_to_physics(
     linear_velocity: &mut LinearVelocity,
     movement_mode: &mut MovementMode,
     on_ground: bool,
@@ -258,7 +258,7 @@ pub fn apply_movement_step_to_components(
     camera: &Transform,
     delta_seconds: f32,
 ) -> MovementStepResult {
-    let step = compute_movement_step_from_actions(
+    let step = compute_velocity_from_player_actions(
         linear_velocity.0,
         *movement_mode,
         on_ground,
@@ -293,7 +293,7 @@ mod tests {
             camera_right: Vec3::X,
         };
 
-        let new_velocity = compute_desired_velocity(velocity, mode, true, &input, 0.1);
+        let new_velocity = compute_player_desired_velocity(velocity, mode, true, &input, 0.1);
 
         // Should have positive Z velocity (forward movement)
         assert!(new_velocity.z > 0.0);
@@ -311,10 +311,10 @@ mod tests {
             camera_right: Vec3::X,
         };
 
-        let new_velocity = compute_desired_velocity(velocity, mode, true, &input, 0.1);
+        let new_velocity = compute_player_desired_velocity(velocity, mode, true, &input, 0.1);
 
         // Should have upward velocity from jump
-        assert_eq!(new_velocity.y, PLAYER_JUMP_FORCE);
+        assert_eq!(new_velocity.y, PLAYER_JUMP_VELOCITY);
     }
 
     #[test]
@@ -329,7 +329,7 @@ mod tests {
             camera_right: Vec3::X,
         };
 
-        let new_velocity = compute_desired_velocity(velocity, mode, false, &input, 0.1);
+        let new_velocity = compute_player_desired_velocity(velocity, mode, false, &input, 0.1);
 
         // Should have upward velocity
         assert_eq!(new_velocity.y, FLY_VERTICAL_SPEED);

@@ -54,42 +54,44 @@ pub struct ChunkColliderEntityRegistry {
     pub entities: HashMap<ChunkPos, Entity>,
 }
 
-/// Chunks that are currently being cooked by the worker.
+/// Tracks which chunks currently have collider cooking jobs running on worker threads.
 #[derive(Resource, Default)]
-pub struct ChunkColliderInFlight {
-    pub in_flight: HashSet<ChunkPos>,
+pub struct ColliderCookingInProgress {
+    pub chunks: HashSet<ChunkPos>,
 }
 
-/// Pending chunk positions waiting to be cooked (coalesced per chunk).
+/// Queue of chunks waiting to have their colliders cooked.
 /// Maps chunk position to the requested LOD level.
 #[derive(Resource, Default)]
-pub struct ChunkColliderPending {
+pub struct ColliderCookQueue {
     pub pending: HashMap<ChunkPos, usize>,
 }
 
-/// Per-chunk generation counter to discard stale cook results.
+/// Tracks collider version per chunk to discard stale cook results.
+/// When a chunk is modified while cooking, the version increments and
+/// the old cook result (with lower version) is discarded.
 #[derive(Resource, Default)]
-pub struct ChunkColliderGeneration {
-    pub generation: HashMap<ChunkPos, u64>,
+pub struct ColliderVersionTracker {
+    pub versions: HashMap<ChunkPos, u64>,
 }
 
 #[derive(Resource)]
-pub struct ChunkColliderJobSender(pub Sender<ChunkColliderJob>);
+pub struct ColliderCookJobSender(pub Sender<ColliderCookJob>);
 
 #[derive(Resource)]
-pub struct ChunkColliderResultReceiver(pub Receiver<ChunkColliderResult>);
+pub struct ColliderCookResultReceiver(pub Receiver<ColliderCookResult>);
 
-struct ChunkColliderJob {
+struct ColliderCookJob {
     chunk_pos: ChunkPos,
     chunk: Arc<Chunk>,
     lod: usize,
-    generation: u64,
+    version: u64,
 }
 
-struct ChunkColliderResult {
+struct ColliderCookResult {
     chunk_pos: ChunkPos,
     bundle: Option<StaticChunkColliderBundle>,
-    generation: u64,
+    version: u64,
 }
 
 /// Trait for accessing chunk data. Implemented by both ClientWorldMap and VoxelWorld.
@@ -98,24 +100,24 @@ pub trait ChunkProvider: Send + Sync + 'static {
     fn get_chunk(&self, pos: ChunkPos) -> Option<Arc<Chunk>>;
 }
 
-/// Maximum number of new collider cook tasks to start per frame.
-const MAX_NEW_COOK_TASKS_PER_TICK: usize = 8;
-/// Capacity for the collider worker's input queue.
-const COLLIDER_QUEUE_CAPACITY: usize = 128;
+/// Maximum number of new collider cook jobs to dispatch per frame.
+const MAX_COOK_JOBS_PER_TICK: usize = 8;
+/// Capacity for the collider cook job queue.
+const COOK_JOB_QUEUE_CAPACITY: usize = 128;
 /// Number of threads dedicated to collider cooking.
-const COLLIDER_WORKER_THREADS: usize = 2;
-/// Maximum number of cooked colliders to apply per frame to avoid long stalls.
-const MAX_COLLIDER_APPLIES_PER_TICK: usize = 16;
+const COLLIDER_COOK_THREAD_COUNT: usize = 2;
+/// Maximum number of cooked colliders to spawn per frame to avoid long stalls.
+const MAX_COLLIDER_SPAWNS_PER_TICK: usize = 16;
 
-fn setup_collider_worker(mut commands: Commands) {
-    let (job_sender, job_receiver) = bounded::<ChunkColliderJob>(COLLIDER_QUEUE_CAPACITY);
-    let (result_sender, result_receiver) = unbounded::<ChunkColliderResult>();
+fn spawn_collider_cook_worker_threads(mut commands: Commands) {
+    let (job_sender, job_receiver) = bounded::<ColliderCookJob>(COOK_JOB_QUEUE_CAPACITY);
+    let (result_sender, result_receiver) = unbounded::<ColliderCookResult>();
 
-    for i in 0..COLLIDER_WORKER_THREADS {
+    for i in 0..COLLIDER_COOK_THREAD_COUNT {
         let job_receiver = job_receiver.clone();
         let result_sender = result_sender.clone();
         Builder::new()
-            .name(format!("collider-worker-{i}"))
+            .name(format!("collider-cook-{i}"))
             .spawn(move || {
                 while let Ok(job) = job_receiver.recv() {
                     // Catch panics during collider cooking to avoid killing the worker thread.
@@ -129,7 +131,7 @@ fn setup_collider_worker(mut commands: Commands) {
                         Ok(bundle) => bundle,
                         Err(_) => {
                             warn!(
-                                "Collider cook panicked for chunk {:?}; clearing in-flight",
+                                "Collider cook panicked for chunk {:?}; discarding result",
                                 job.chunk_pos
                             );
                             None
@@ -137,10 +139,10 @@ fn setup_collider_worker(mut commands: Commands) {
                     };
 
                     if result_sender
-                        .send(ChunkColliderResult {
+                        .send(ColliderCookResult {
                             chunk_pos: job.chunk_pos,
                             bundle,
-                            generation: job.generation,
+                            version: job.version,
                         })
                         .is_err()
                     {
@@ -148,21 +150,21 @@ fn setup_collider_worker(mut commands: Commands) {
                     }
                 }
             })
-            .expect("collider worker thread spawn");
+            .expect("collider cook thread spawn");
     }
 
-    commands.insert_resource(ChunkColliderJobSender(job_sender));
-    commands.insert_resource(ChunkColliderResultReceiver(result_receiver));
+    commands.insert_resource(ColliderCookJobSender(job_sender));
+    commands.insert_resource(ColliderCookResultReceiver(result_receiver));
 }
 
-/// System that enqueues asynchronous collider cook tasks for chunk rebuild requests.
-pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
+/// Dispatches collider cook jobs to worker threads from the pending queue.
+pub fn dispatch_collider_cook_jobs<P: ChunkProvider + Resource>(
     mut events: MessageReader<ChunkColliderRebuildRequest>,
     chunk_provider: Option<Res<P>>,
-    mut pending: ResMut<ChunkColliderPending>,
-    mut in_flight: ResMut<ChunkColliderInFlight>,
-    mut generation: ResMut<ChunkColliderGeneration>,
-    job_sender: Res<ChunkColliderJobSender>,
+    mut cook_queue: ResMut<ColliderCookQueue>,
+    mut cooking_in_progress: ResMut<ColliderCookingInProgress>,
+    mut version_tracker: ResMut<ColliderVersionTracker>,
+    job_sender: Res<ColliderCookJobSender>,
 ) {
     let Some(chunk_provider) = chunk_provider else {
         return;
@@ -171,22 +173,22 @@ pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
     // Coalesce incoming events; we only need one pending entry per chunk.
     // If multiple requests come for the same chunk, use the lowest (most detailed) LOD.
     for event in events.read() {
-        pending
+        cook_queue
             .pending
             .entry(event.chunk_pos)
             .and_modify(|existing_lod| *existing_lod = (*existing_lod).min(event.lod))
             .or_insert(event.lod);
     }
 
-    let mut spawned = 0usize;
+    let mut dispatched = 0usize;
 
     // Start up to the frame budget from the pending set, skipping chunks already cooking
-    let mut to_start: Vec<(ChunkPos, usize)> = pending
+    let mut to_start: Vec<(ChunkPos, usize)> = cook_queue
         .pending
         .iter()
-        .filter(|(pos, _)| !in_flight.in_flight.contains(*pos))
+        .filter(|(pos, _)| !cooking_in_progress.chunks.contains(*pos))
         .map(|(pos, lod)| (*pos, *lod))
-        .take(MAX_NEW_COOK_TASKS_PER_TICK)
+        .take(MAX_COOK_JOBS_PER_TICK)
         .collect();
 
     for (chunk_pos, lod) in to_start.drain(..) {
@@ -195,62 +197,66 @@ pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
             continue;
         };
 
-        let gen_entry = generation.generation.entry(chunk_pos).or_insert(0);
-        *gen_entry += 1;
-        let generation_value = *gen_entry;
+        let version_entry = version_tracker.versions.entry(chunk_pos).or_insert(0);
+        *version_entry += 1;
+        let version = *version_entry;
 
-        match job_sender.0.try_send(ChunkColliderJob {
+        match job_sender.0.try_send(ColliderCookJob {
             chunk_pos,
             chunk,
             lod,
-            generation: generation_value,
+            version,
         }) {
             Ok(()) => {
-                pending.pending.remove(&chunk_pos);
-                in_flight.in_flight.insert(chunk_pos);
-                spawned += 1;
+                cook_queue.pending.remove(&chunk_pos);
+                cooking_in_progress.chunks.insert(chunk_pos);
+                dispatched += 1;
             }
             Err(TrySendError::Full(_)) => {
                 // Worker queue is full; keep pending and try again next tick
-                warn!("Collider worker queue is full; deferring new jobs");
+                warn!("Collider cook queue is full; deferring new jobs");
                 break;
             }
             Err(TrySendError::Disconnected(_)) => {
-                warn!("Collider worker thread is disconnected; dropping job for {chunk_pos:?}");
+                warn!("Collider cook worker is disconnected; dropping job for {chunk_pos:?}");
                 break;
             }
         }
 
-        if spawned >= MAX_NEW_COOK_TASKS_PER_TICK {
+        if dispatched >= MAX_COOK_JOBS_PER_TICK {
             break;
         }
     }
 }
 
-/// System that applies finished collider cook tasks, spawning/despawning entities on the main thread.
-pub fn apply_finished_collider_cooks(
+/// Spawns collider entities from finished cook results.
+pub fn spawn_cooked_collider_entities(
     mut commands: Commands,
     mut collider_entities: ResMut<ChunkColliderEntityRegistry>,
-    mut in_flight: ResMut<ChunkColliderInFlight>,
-    generation: Res<ChunkColliderGeneration>,
-    results: Option<Res<ChunkColliderResultReceiver>>,
+    mut cooking_in_progress: ResMut<ColliderCookingInProgress>,
+    version_tracker: Res<ColliderVersionTracker>,
+    results: Option<Res<ColliderCookResultReceiver>>,
 ) {
     let Some(results) = results else {
         return;
     };
 
-    let mut applied = 0usize;
+    let mut spawned = 0usize;
 
-    for ChunkColliderResult {
+    for ColliderCookResult {
         chunk_pos,
         bundle,
-        generation: result_gen,
+        version: result_version,
     } in results.0.try_iter()
     {
-        // Drop stale results if a newer generation was queued for the same chunk
-        let current_gen = generation.generation.get(&chunk_pos).copied().unwrap_or(0);
-        if result_gen != current_gen {
-            in_flight.in_flight.remove(&chunk_pos);
+        // Drop stale results if a newer version was queued for the same chunk
+        let current_version = version_tracker
+            .versions
+            .get(&chunk_pos)
+            .copied()
+            .unwrap_or(0);
+        if result_version != current_version {
+            cooking_in_progress.chunks.remove(&chunk_pos);
             continue;
         }
 
@@ -265,33 +271,31 @@ pub fn apply_finished_collider_cooks(
             collider_entities.entities.insert(chunk_pos, entity);
         }
 
-        // Mark job complete
-        in_flight.in_flight.remove(&chunk_pos);
+        // Mark cooking complete
+        cooking_in_progress.chunks.remove(&chunk_pos);
 
-        applied += 1;
-        if applied >= MAX_COLLIDER_APPLIES_PER_TICK {
+        spawned += 1;
+        if spawned >= MAX_COLLIDER_SPAWNS_PER_TICK {
             break;
         }
     }
 }
 
-/// System that despawns chunk collider entities when their containing column is unloaded.
-///
-/// Listens for `ColUnloadEvent` and removes all collider entities for chunks in that column.
+/// Despawns chunk collider entities when their containing column is unloaded.
 pub fn despawn_colliders_for_unloaded_columns(
     mut commands: Commands,
     mut events: MessageReader<ColUnloadEvent>,
     mut collider_entities: ResMut<ChunkColliderEntityRegistry>,
-    mut pending: ResMut<ChunkColliderPending>,
-    mut in_flight: ResMut<ChunkColliderInFlight>,
-    mut generation: ResMut<ChunkColliderGeneration>,
+    mut cook_queue: ResMut<ColliderCookQueue>,
+    mut cooking_in_progress: ResMut<ColliderCookingInProgress>,
+    mut version_tracker: ResMut<ColliderVersionTracker>,
 ) {
     for event in events.read() {
         for chunk_pos in chunks_in_col(&event.0) {
-            // Cancel any pending or in-flight cook task for this chunk
-            pending.pending.remove(&chunk_pos);
-            in_flight.in_flight.remove(&chunk_pos);
-            generation.generation.remove(&chunk_pos);
+            // Cancel any pending or in-progress cook task for this chunk
+            cook_queue.pending.remove(&chunk_pos);
+            cooking_in_progress.chunks.remove(&chunk_pos);
+            version_tracker.versions.remove(&chunk_pos);
 
             if let Some(entity) = collider_entities.entities.remove(&chunk_pos) {
                 commands.entity(entity).despawn();
@@ -320,17 +324,17 @@ impl<P: ChunkProvider + Resource> Default for ChunkColliderPlugin<P> {
 impl<P: ChunkProvider + Resource> Plugin for ChunkColliderPlugin<P> {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChunkColliderEntityRegistry>()
-            .init_resource::<ChunkColliderPending>()
-            .init_resource::<ChunkColliderInFlight>()
-            .init_resource::<ChunkColliderGeneration>()
-            .add_systems(Startup, setup_collider_worker)
+            .init_resource::<ColliderCookQueue>()
+            .init_resource::<ColliderCookingInProgress>()
+            .init_resource::<ColliderVersionTracker>()
+            .add_systems(Startup, spawn_collider_cook_worker_threads)
             .add_message::<ChunkColliderRebuildRequest>()
             .add_systems(
                 Update,
                 (
-                    queue_collider_cook_tasks::<P>,
+                    dispatch_collider_cook_jobs::<P>,
                     despawn_colliders_for_unloaded_columns,
-                    apply_finished_collider_cooks,
+                    spawn_cooked_collider_entities,
                 )
                     .chain(),
             );

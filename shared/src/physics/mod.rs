@@ -29,17 +29,17 @@
 //! 4. **Server** broadcasts authoritative position updates
 //! 5. **Client** reconciles prediction with server state (see `ServerAuthorityReconciliationPlugin`)
 //!
-//! Both client and server use `apply_movement_step_to_components()` ensuring identical
+//! Both client and server use `apply_player_input_to_physics()` ensuring identical
 //! velocity calculations (though collision resolution may differ due to timing).
 //!
 //! # Key Types and Functions
 //!
 //! - [`DynamicPlayerPhysicsBundle`]: Bundle for spawning player entities with all physics components
 //! - [`SharedPhysicsWorldPlugin`]: Plugin that configures avian3d (gravity, collision detection)
-//! - [`apply_movement_step_to_components`]: Applies input to ECS components (client & server)
-//! - [`compute_desired_velocity`]: Pure function for velocity calculation
-//! - [`update_ground_state_system`]: Generic system for ground detection via avian3d contacts
-//! - [`update_stepped_block_system`]: Generic system for detecting which block player stands on
+//! - [`apply_player_input_to_physics`]: Applies input to ECS components (client & server)
+//! - [`compute_player_desired_velocity`]: Pure function for velocity calculation
+//! - [`sync_grounded_state`]: Generic system for ground detection via avian3d contacts
+//! - [`sync_block_beneath_feet`]: Generic system for detecting which block player stands on
 
 pub mod avian_physics;
 pub mod ground_detection;
@@ -62,15 +62,16 @@ pub fn collision_layers_for_realm(realm: Realm) -> CollisionLayers {
 
 // Re-export core physics types and functions from the avian integration
 pub use avian_physics::{
-    actions_to_camera_relative_input, apply_movement_step_to_components, compute_desired_velocity,
-    compute_movement_step_from_actions, DynamicPlayerPhysicsBundle, MovementInput, MovementMode,
-    MovementStepResult, SharedPhysicsWorldPlugin, AIR_FRICTION, GROUND_ACCELERATION,
-    GROUND_FRICTION, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS, PLAYER_GRAVITY,
-    PLAYER_JUMP_FORCE, PLAYER_QUERY_BOUNDS,
+    apply_player_input_to_physics, compute_player_desired_velocity,
+    compute_velocity_from_player_actions, player_actions_to_movement_input,
+    DynamicPlayerPhysicsBundle, MovementInput, MovementMode, MovementStepResult,
+    SharedPhysicsWorldPlugin, AIR_FRICTION, GROUND_ACCELERATION, GROUND_FRICTION,
+    PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS, PLAYER_GRAVITY, PLAYER_JUMP_VELOCITY,
+    PLAYER_QUERY_BOUNDS,
 };
 
 // Re-export ground detection from avian3d contacts
 pub use ground_detection::{
-    get_stepped_block, is_on_ground_from_contacts, update_ground_state_system,
-    update_stepped_block_system, OnGround, SteppingOn, GROUND_NORMAL_THRESHOLD,
+    check_grounded_from_collisions, find_block_beneath_feet, sync_block_beneath_feet,
+    sync_grounded_state, BlockBeneathFeet, Grounded, MIN_GROUND_NORMAL_Y,
 };

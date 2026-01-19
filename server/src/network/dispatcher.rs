@@ -14,8 +14,7 @@ use shared::messages::{
 };
 use shared::net::clock;
 use shared::physics::{
-    update_ground_state_system, update_stepped_block_system, DynamicPlayerPhysicsBundle,
-    MovementMode,
+    sync_block_beneath_feet, sync_grounded_state, DynamicPlayerPhysicsBundle, MovementMode,
 };
 use shared::world::realm::Realm;
 use shared::world::WorldSeed;
@@ -55,8 +54,8 @@ impl Plugin for ServerNetworkPlugin {
         app.add_systems(
             Update,
             (
-                update_ground_state_system::<NetworkPlayer>,
-                update_stepped_block_system::<NetworkPlayer, VoxelWorld>,
+                sync_grounded_state::<NetworkPlayer>,
+                sync_block_beneath_feet::<NetworkPlayer, VoxelWorld>,
                 handle_player_inputs_system,
                 broadcast_player_updates_system,
             )

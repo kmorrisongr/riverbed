@@ -5,14 +5,14 @@ use bevy::prelude::*;
 
 use super::{MovementMode, PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS};
 use crate::physics::collision_layers_for_realm;
-use crate::physics::ground_detection::{OnGround, SteppingOn};
+use crate::physics::ground_detection::{BlockBeneathFeet, Grounded};
 use crate::world::realm::Realm;
 
 /// Physics bundle for dynamic player entities using avian3d.
 ///
 /// This bundle contains all components needed for physics simulation:
 /// - Avian3d components (RigidBody::Dynamic, Collider, velocities, etc.)
-/// - Movement state tracking (MovementMode, OnGround, SteppingOn)
+/// - Movement state tracking (MovementMode, Grounded, BlockBeneathFeet)
 ///
 /// Both client and server use this bundle when spawning player entities,
 /// ensuring consistent physics behavior across the network.
@@ -33,8 +33,8 @@ pub struct DynamicPlayerPhysicsBundle {
     pub collision_layers: CollisionLayers,
     // Movement state components (shared with ground detection systems)
     pub movement_mode: MovementMode,
-    pub on_ground: OnGround,
-    pub stepping_on: SteppingOn,
+    pub grounded: Grounded,
+    pub block_beneath_feet: BlockBeneathFeet,
 }
 
 impl DynamicPlayerPhysicsBundle {
@@ -60,8 +60,8 @@ impl DynamicPlayerPhysicsBundle {
             collision_layers: collision_layers_for_realm(realm),
             // Movement state defaults
             movement_mode: MovementMode::default(),
-            on_ground: OnGround::default(),
-            stepping_on: SteppingOn::default(),
+            grounded: Grounded::default(),
+            block_beneath_feet: BlockBeneathFeet::default(),
         }
     }
 

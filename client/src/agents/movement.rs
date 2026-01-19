@@ -7,8 +7,8 @@
 
 use bevy::prelude::*;
 use shared::physics::{
-    apply_movement_step_to_components, update_ground_state_system, update_stepped_block_system,
-    LinearVelocity, MovementMode, OnGround,
+    apply_player_input_to_physics, sync_block_beneath_feet, sync_grounded_state, Grounded,
+    LinearVelocity, MovementMode,
 };
 
 use crate::network::buffered_client::CurrentFrameInputs;
@@ -32,12 +32,12 @@ impl Plugin for ClientSideMovementPredictionPlugin {
         // Use shared systems for ground state updates, parameterized by PlayerControlled marker
         app.add_systems(
             PreUpdate,
-            update_stepped_block_system::<PlayerControlled, ClientWorldMap>,
+            sync_block_beneath_feet::<PlayerControlled, ClientWorldMap>,
         )
         .add_systems(
             Update,
             (
-                update_ground_state_system::<PlayerControlled>,
+                sync_grounded_state::<PlayerControlled>,
                 apply_predicted_movement_input,
             )
                 .chain(),
@@ -49,11 +49,11 @@ impl Plugin for ClientSideMovementPredictionPlugin {
 pub struct Crouching(pub bool);
 
 // Re-export shared physics components for other client modules
-pub use shared::physics::SteppingOn;
+pub use shared::physics::BlockBeneathFeet;
 
 /// Applies movement input to compute predicted velocity for the local player.
 ///
-/// This system uses the same `apply_movement_step_to_components` function that the server uses,
+/// This system uses the same `apply_player_input_to_physics` function that the server uses,
 /// ensuring that client-side prediction produces identical velocity calculations.
 /// Avian3d will then integrate the velocity and resolve collisions.
 fn apply_predicted_movement_input(
@@ -61,11 +61,11 @@ fn apply_predicted_movement_input(
     frame_inputs: Res<CurrentFrameInputs>,
     camera_query: Query<&Transform, With<FpsCam>>,
     mut player_query: Query<
-        (&mut LinearVelocity, &mut MovementMode, &OnGround),
+        (&mut LinearVelocity, &mut MovementMode, &Grounded),
         (With<PlayerControlled>, Without<FpsCam>),
     >,
 ) {
-    let Ok((mut linear_velocity, mut movement_mode, on_ground)) = player_query.single_mut() else {
+    let Ok((mut linear_velocity, mut movement_mode, grounded)) = player_query.single_mut() else {
         return;
     };
 
@@ -78,10 +78,10 @@ fn apply_predicted_movement_input(
     let camera_transform = camera_query.single().copied().unwrap_or_default();
 
     let delta_seconds = time.delta_secs();
-    apply_movement_step_to_components(
+    apply_player_input_to_physics(
         &mut linear_velocity,
         &mut movement_mode,
-        on_ground.0,
+        grounded.0,
         &frame_inputs.0.inputs,
         &camera_transform,
         delta_seconds,

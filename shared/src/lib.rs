@@ -33,7 +33,7 @@ pub const FLY_VERTICAL_SPEED: f32 = 100.0;
 // Player spawn position (shared between client and server)
 pub const DEFAULT_SPAWN_POSITION: Vec3 = Vec3::new(280., 500., -150.);
 
-// Note: Physics constants are available via shared::physics::{PLAYER_GRAVITY, PLAYER_JUMP_FORCE, etc.}
+// Note: Physics constants are available via shared::physics::{PLAYER_GRAVITY, PLAYER_JUMP_VELOCITY, etc.}
 // Re-export only the most commonly referenced query bounds for convenience
 pub use physics::PLAYER_QUERY_BOUNDS;
 

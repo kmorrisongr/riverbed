@@ -3,7 +3,7 @@ use bevy_renet::renet::{ClientId, RenetServer};
 use shared::messages::{
     ClientToServerPlayerInput, PlayerId, ServerToClientMessage, ServerToClientPlayerUpdate,
 };
-use shared::physics::{apply_movement_step_to_components, LinearVelocity, MovementMode, OnGround};
+use shared::physics::{apply_player_input_to_physics, Grounded, LinearVelocity, MovementMode};
 use std::collections::HashMap;
 
 use super::dispatcher::NetworkPlayer;
@@ -13,10 +13,10 @@ use super::extensions::SendGameMessageExtension;
 pub use shared::DEFAULT_SPAWN_POSITION;
 
 // =============================================================================
-// Note: Ground state and stepped block updates now use shared systems from
+// Note: Ground state and block beneath feet updates now use shared systems from
 // shared::physics::ground_detection. See dispatcher.rs for system registration:
-// - update_ground_state_system::<NetworkPlayer>
-// - update_stepped_block_system::<NetworkPlayer, VoxelWorld>
+// - sync_grounded_state::<NetworkPlayer>
+// - sync_block_beneath_feet::<NetworkPlayer, VoxelWorld>
 // =============================================================================
 
 /// The position the client predicted when sending its input (for diagnostics).
@@ -109,7 +109,7 @@ pub fn handle_player_inputs_system(
         &mut LinearVelocity,
         &mut MovementMode,
         &mut ClientReportedPredictedPosition,
-        &OnGround,
+        &Grounded,
     )>,
 ) {
     for ev in events.read() {
@@ -126,7 +126,7 @@ pub fn handle_player_inputs_system(
             continue;
         }
 
-        let Some((_, mut linear_velocity, mut movement_mode, mut client_predicted_pos, on_ground)) =
+        let Some((_, mut linear_velocity, mut movement_mode, mut client_predicted_pos, grounded)) =
             player_query
                 .iter_mut()
                 .find(|(np, _, _, _, _)| np.client_id == ev.client_id)
@@ -146,10 +146,10 @@ pub fn handle_player_inputs_system(
         }
 
         let delta_seconds = ev.input.delta_ms as f32 / 1000.0;
-        apply_movement_step_to_components(
+        apply_player_input_to_physics(
             &mut linear_velocity,
             &mut movement_mode,
-            on_ground.0,
+            grounded.0,
             &ev.input.inputs,
             &ev.input.camera,
             delta_seconds,

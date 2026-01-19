@@ -1,10 +1,10 @@
 //! Ground detection using avian3d collision contacts.
 //!
 //! This module provides components and systems for ground state tracking:
-//! - `OnGround`: Whether an entity is standing on a surface (from avian3d contacts)
-//! - `SteppingOn`: Which block type the entity is standing on (for surface effects)
+//! - `Grounded`: Whether an entity is standing on a surface (from avian3d contacts)
+//! - `BlockBeneathFeet`: Which block type the entity is standing on (for surface effects)
 //!
-//! The generic systems `update_ground_state_system` and `update_stepped_block_system`
+//! The generic systems `sync_grounded_state` and `sync_block_beneath_feet`
 //! can be used by both client and server with their respective marker components.
 
 use avian3d::prelude::Collisions;
@@ -18,12 +18,12 @@ use crate::world::realm::Realm;
 
 /// Minimum Y component of contact normal to count as "ground".
 /// 0.7 corresponds to approximately a 45-degree slope.
-pub const GROUND_NORMAL_THRESHOLD: f32 = 0.7;
+pub const MIN_GROUND_NORMAL_Y: f32 = 0.7;
 
 /// Component that tracks whether an entity is on the ground.
 /// Updated each frame from avian3d collision data.
 #[derive(Component, Debug, Default, Clone, Copy)]
-pub struct OnGround(pub bool);
+pub struct Grounded(pub bool);
 
 /// Component that tracks which block type an entity is standing on.
 ///
@@ -35,61 +35,60 @@ pub struct OnGround(pub bool);
 /// Updated by querying the voxel world directly (not avian3d contacts),
 /// since we need to know the actual block type, not just collision geometry.
 #[derive(Component, Debug, Clone, Copy)]
-pub struct SteppingOn(pub Block);
+pub struct BlockBeneathFeet(pub Block);
 
-impl Default for SteppingOn {
+impl Default for BlockBeneathFeet {
     fn default() -> Self {
         Self(Block::Air)
     }
 }
 
 /// Get block positions beneath a capsule-centered player footprint.
-/// Assumes `pos` is the capsule center and uses the provided AABB footprint.
-fn block_positions_beneath_capsule(
-    pos: Vec3,
+fn footprint_block_positions(
+    capsule_center: Vec3,
     realm: Realm,
-    aabb: Vec3,
+    footprint_size: Vec3,
 ) -> impl Iterator<Item = BlockPos> {
     // Determine Y level just below feet (assuming pos is capsule center)
-    let feet_y = pos.y - (PLAYER_CAPSULE_HEIGHT / 2.0 + PLAYER_CAPSULE_RADIUS);
+    let feet_y = capsule_center.y - (PLAYER_CAPSULE_HEIGHT / 2.0 + PLAYER_CAPSULE_RADIUS);
     let y = (feet_y - 0.01).floor() as i32;
 
     // Center the query area on the position
-    let x_start = (pos.x - aabb.x / 2.0).floor() as i32;
-    let x_end = (pos.x + aabb.x / 2.0).floor() as i32;
-    let z_start = (pos.z - aabb.z / 2.0).floor() as i32;
-    let z_end = (pos.z + aabb.z / 2.0).floor() as i32;
+    let x_start = (capsule_center.x - footprint_size.x / 2.0).floor() as i32;
+    let x_end = (capsule_center.x + footprint_size.x / 2.0).floor() as i32;
+    let z_start = (capsule_center.z - footprint_size.z / 2.0).floor() as i32;
+    let z_end = (capsule_center.z + footprint_size.z / 2.0).floor() as i32;
 
     (x_start..=x_end)
         .flat_map(move |x| (z_start..=z_end).map(move |z| (x, z)))
         .map(move |(x, z)| BlockPos { x, y, z, realm })
 }
 
-/// Get the block the entity is standing on (for friction/slowing calculations).
+/// Find the solid block closest to the entity's feet.
 ///
 /// Expects the position to be the center of a capsule collider and queries using the
-/// provided AABB footprint around the feet.
-pub fn get_stepped_block<W: BlockAccess>(
+/// provided footprint size around the feet.
+pub fn find_block_beneath_feet<W: BlockAccess>(
     world: &W,
-    position: Vec3,
+    capsule_center: Vec3,
     realm: Realm,
-    aabb: Vec3,
+    footprint_size: Vec3,
 ) -> Block {
     let mut closest_block = Block::Air;
-    let mut min_dist = f32::INFINITY;
+    let mut min_dist_sq = f32::INFINITY;
 
-    for block_pos in block_positions_beneath_capsule(position, realm, aabb) {
+    for block_pos in footprint_block_positions(capsule_center, realm, footprint_size) {
         let block = world.get_block_safe(block_pos);
         if block.is_traversable() {
             continue;
         }
 
-        // Horizontal distance from center
-        let dist = (position.x - (block_pos.x as f32 + 0.5)).powi(2)
-            + (position.z - (block_pos.z as f32 + 0.5)).powi(2);
+        // Horizontal distance squared from center
+        let dist_sq = (capsule_center.x - (block_pos.x as f32 + 0.5)).powi(2)
+            + (capsule_center.z - (block_pos.z as f32 + 0.5)).powi(2);
 
-        if dist < min_dist {
-            min_dist = dist;
+        if dist_sq < min_dist_sq {
+            min_dist_sq = dist_sq;
             closest_block = block;
         }
     }
@@ -100,11 +99,11 @@ pub fn get_stepped_block<W: BlockAccess>(
 ///
 /// A contact is considered "ground" if:
 /// - The contact is currently touching (not just a sensor overlap)
-/// - The contact normal has a Y component > GROUND_NORMAL_THRESHOLD
+/// - The contact normal has a Y component > MIN_GROUND_NORMAL_Y
 ///
 /// The normal points from first shape to second, so we need to check
 /// both directions depending on which entity we're querying for.
-pub fn is_on_ground_from_contacts(collisions: &Collisions, entity: Entity) -> bool {
+pub fn check_grounded_from_collisions(collisions: &Collisions, entity: Entity) -> bool {
     for contact_pair in collisions.collisions_with(entity) {
         // Skip if not actually touching
         if !contact_pair.is_touching() {
@@ -124,7 +123,7 @@ pub fn is_on_ground_from_contacts(collisions: &Collisions, entity: Entity) -> bo
                 manifold.normal.y
             };
 
-            if effective_y > GROUND_NORMAL_THRESHOLD {
+            if effective_y > MIN_GROUND_NORMAL_Y {
                 return true;
             }
         }
@@ -140,41 +139,41 @@ pub fn is_on_ground_from_contacts(collisions: &Collisions, entity: Entity) -> bo
 // on server).
 // =============================================================================
 
-/// Generic system that updates OnGround component from avian3d collision contacts.
+/// Syncs the `Grounded` component from avian3d collision contacts.
 ///
 /// This system queries all entities with the given marker component `M` and
-/// updates their `OnGround` state based on collision contacts. Should run
+/// updates their `Grounded` state based on collision contacts. Should run
 /// before movement input processing so jump detection uses current frame's state.
 ///
 /// # Type Parameters
 /// - `M`: Marker component to filter which entities to update (e.g., `PlayerControlled`)
-pub fn update_ground_state_system<M: Component>(
+pub fn sync_grounded_state<M: Component>(
     collisions: Collisions,
-    mut query: Query<(Entity, &mut OnGround), With<M>>,
+    mut query: Query<(Entity, &mut Grounded), With<M>>,
 ) {
-    for (entity, mut on_ground) in query.iter_mut() {
-        on_ground.0 = is_on_ground_from_contacts(&collisions, entity);
+    for (entity, mut grounded) in query.iter_mut() {
+        grounded.0 = check_grounded_from_collisions(&collisions, entity);
     }
 }
 
-/// Generic system that updates SteppingOn component by querying the voxel world.
+/// Syncs the `BlockBeneathFeet` component by querying the voxel world.
 ///
 /// This system queries all entities with the given marker component `M` and
-/// updates their `SteppingOn` block type by checking the voxel world directly.
+/// updates their `BlockBeneathFeet` block type by checking the voxel world directly.
 /// Used for footstep sounds and surface-specific effects.
 ///
 /// # Type Parameters
 /// - `M`: Marker component to filter which entities to update
 /// - `W`: World resource that implements `BlockAccess` (e.g., `ClientWorldMap`, `VoxelWorld`)
-pub fn update_stepped_block_system<M: Component, W: BlockAccess + Resource>(
+pub fn sync_block_beneath_feet<M: Component, W: BlockAccess + Resource>(
     world: Option<Res<W>>,
-    mut query: Query<(&Transform, &Realm, &mut SteppingOn), With<M>>,
+    mut query: Query<(&Transform, &Realm, &mut BlockBeneathFeet), With<M>>,
 ) {
     let Some(world) = world else { return };
 
-    for (transform, realm, mut stepping_on) in query.iter_mut() {
-        stepping_on.0 =
-            get_stepped_block(&*world, transform.translation, *realm, PLAYER_QUERY_BOUNDS);
+    for (transform, realm, mut block_beneath) in query.iter_mut() {
+        block_beneath.0 =
+            find_block_beneath_feet(&*world, transform.translation, *realm, PLAYER_QUERY_BOUNDS);
     }
 }
 
@@ -185,7 +184,7 @@ mod tests {
     #[test]
     fn test_ground_normal_threshold() {
         // 0.7 should be approximately 45 degrees
-        let angle = GROUND_NORMAL_THRESHOLD.acos().to_degrees();
+        let angle = MIN_GROUND_NORMAL_Y.acos().to_degrees();
         assert!(angle > 40.0 && angle < 50.0, "Threshold angle: {}", angle);
     }
 
@@ -208,11 +207,11 @@ mod tests {
     }
 
     #[test]
-    fn test_stepped_block_query() {
+    fn test_block_beneath_feet_query() {
         let world = TestWorld;
 
         // At y=0.5 we should see the granite floor below (feet at ~-0.35)
-        let block = get_stepped_block(
+        let block = find_block_beneath_feet(
             &world,
             Vec3::new(0.0, 0.5, 0.0),
             Realm::Overworld,
@@ -221,7 +220,7 @@ mod tests {
         assert_eq!(block, Block::Granite);
 
         // Far above the floor should return air
-        let block = get_stepped_block(
+        let block = find_block_beneath_feet(
             &world,
             Vec3::new(0.0, 5.0, 0.0),
             Realm::Overworld,
