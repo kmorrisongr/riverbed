@@ -25,17 +25,15 @@ use bevy::{
 use clap::Parser;
 use crossbeam::channel::unbounded;
 use network::NetworkPlugin;
-use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use render::{Render, TextureLoadPlugin};
 use shared::logging::logging::RiverbedLogPlugin;
-use shared::physics::SharedPhysicsWorldPlugin;
 use shared::world::block_entities::BlockEntities;
 use shared::world::world_rng::WorldRng;
 use sounds::SoundPlugin;
 use ui::UIPlugin;
 use world::{ClientWorldMap, ClientWorldPlugin};
-#[cfg(feature = "lightyear-net")]
-use crate::network::LightyearClientPlugin;
+use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
+
 const SEED: u64 = 42;
 pub const RENDER_DISTANCE: i32 = 32;
 
@@ -99,7 +97,7 @@ fn client(args: Args) {
                 .disable::<LogPlugin>(),
         )
         .add_plugins(RiverbedLogPlugin)
-        .add_plugins(SharedPhysicsWorldPlugin)
+        // Note: Physics plugin is added by LightyearClientPlugin via LightyearPhysicsPlugin
         .insert_resource(network::TargetServer {
             address: args.server,
             ..default()
@@ -116,9 +114,6 @@ fn client(args: Args) {
         .add_plugins(ClientSideMovementPredictionPlugin)
         .add_plugins(Render)
         .add_plugins(SoundPlugin);
-
-    #[cfg(feature = "lightyear-net")]
-    app.add_plugins(LightyearClientPlugin);
 
     app.run();
 }

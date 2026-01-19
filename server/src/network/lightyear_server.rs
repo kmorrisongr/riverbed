@@ -1,6 +1,5 @@
-//! Lightyear server bootstrap: spins up a netcode UDP listener and registers
-//! our replication protocol. Feature-gated behind `lightyear-net` so Renet
-//! remains the default path while this matures.
+//! Lightyear server networking: spins up a netcode UDP listener and registers
+//! our replication protocol for player characters and game state.
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;

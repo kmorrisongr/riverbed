@@ -1,7 +1,7 @@
 mod block_action;
 mod movement;
 mod other_players;
-mod player;
+pub mod player;
 
 pub use block_action::*;
 pub use movement::*;

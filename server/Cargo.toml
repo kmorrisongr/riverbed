@@ -5,7 +5,6 @@ edition = "2021"
 
 [features]
 logging = ["shared/logging"]
-lightyear-net = []
 
 [dependencies]
 shared = { path = "../shared" }

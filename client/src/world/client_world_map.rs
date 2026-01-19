@@ -182,7 +182,6 @@ fn process_block_requests(
     world_map: Option<Res<ClientWorldMap>>,
     mut requests: MessageReader<SetBlockRequest>,
     mut block_changed: MessageWriter<BlockChanged>,
-    mut client: Option<ResMut<bevy_renet::renet::RenetClient>>,
 ) {
     let Some(world_map) = world_map else {
         return;
@@ -211,17 +210,7 @@ fn process_block_requests(
             });
         }
 
-        // Send to server for authoritative processing
-        if let Some(ref mut client) = client {
-            use crate::network::SendGameMessageExtension;
-            use shared::messages::{ClientToServerBlockInteraction, ClientToServerMessage};
-
-            client.send_game_message(ClientToServerMessage::BlockInteraction(
-                ClientToServerBlockInteraction {
-                    position: request.pos,
-                    new_block: request.block,
-                },
-            ));
-        }
+        // TODO: Send block changes to server via lightyear message/channel
+        // For now, block changes are client-side only
     }
 }

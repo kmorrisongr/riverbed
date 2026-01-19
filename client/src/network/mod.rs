@@ -1,89 +1,31 @@
 pub mod buffered_client;
-mod cleanup;
-pub mod extensions;
-mod inputs;
+pub mod lightyear_client;
 pub mod models;
 pub mod reconciliation;
 mod setup;
-mod world;
-#[cfg(feature = "lightyear-net")]
-pub mod lightyear_client;
-pub use cleanup::*;
-pub use extensions::SendGameMessageExtension;
-pub use inputs::*;
+
+pub use lightyear_client::LightyearClientPlugin;
 pub use reconciliation::ServerAuthorityReconciliationPlugin;
 pub use setup::*;
-#[cfg(feature = "lightyear-net")]
-pub use lightyear_client::LightyearClientPlugin;
 
 use bevy::prelude::*;
-use shared::logging::logging::LogEvent;
-use shared::messages::{
-    ServerToClientItemStackUpdate, ServerToClientPlayerSpawn, ServerToClientPlayerUpdate,
-};
 
-use crate::network::buffered_client::{CurrentFrameInputs, SyncTime};
-use crate::ui::CursorGrabbed;
-use shared::net::input_history::InputHistory;
+use crate::network::buffered_client::SyncTime;
 
 pub struct NetworkPlugin;
 impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
-        // Add reconciliation plugin for correcting client prediction with server authority
-        app.add_plugins(ServerAuthorityReconciliationPlugin);
-
-        // Initialize resources
+        // Initialize resources needed by lightyear client
         app.init_resource::<CurrentPlayerProfile>()
-            .init_resource::<CurrentFrameInputs>()
             .init_resource::<SyncTime>()
-            .init_resource::<InputHistory>()
             .init_resource::<SelectedWorld>()
             .init_resource::<ServerTickAtConnect>()
             .init_resource::<WorldSeed>();
 
-        // Register network messages/events
-        app.add_message::<ServerToClientPlayerSpawn>()
-            .add_message::<ServerToClientPlayerUpdate>()
-            .add_message::<ServerToClientItemStackUpdate>()
-            .add_message::<ExitRequestEvent>()
-            .add_message::<LogEvent>();
+        // Startup systems - launch local server if needed
+        app.add_systems(Startup, launch_local_server_system);
 
-        // Setup base netcode plugins (RenetClientPlugin, NetcodeClientPlugin)
-        add_base_netcode(app);
-
-        // Startup systems - run once at launch
-        app.add_systems(
-            Startup,
-            (launch_local_server_system, init_server_connection).chain(),
-        );
-
-        // Update systems - run every frame
-        app.add_systems(
-            Update,
-            (
-                establish_authenticated_connection_to_server,
-                network_failure_handler,
-            ),
-        );
-
-        // Input capture systems - run every frame
-        // pre_input_update prepares a new frame, then we capture inputs
-        app.add_systems(PreUpdate, pre_input_update_system);
-        app.add_systems(
-            Update,
-            (
-                capture_player_inputs_system.run_if(in_state(CursorGrabbed)),
-                update_frame_inputs_system,
-            )
-                .chain(),
-        );
-
-        // Fixed update systems - run at fixed timestep
-        app.add_systems(FixedPreUpdate, poll_network_messages);
-        app.add_systems(FixedUpdate, upload_player_inputs_system);
-
-        // Cleanup systems - handle graceful disconnection
-        app.add_systems(Update, handle_exit_request);
-        app.add_systems(Last, on_app_exit);
+        // Add the lightyear client plugin (handles all networking)
+        app.add_plugins(LightyearClientPlugin);
     }
 }

@@ -1,99 +1,17 @@
+//! Server authority reconciliation.
+//!
+//! With lightyear, reconciliation is handled automatically by the prediction
+//! rollback system. This module is kept as a placeholder for any additional
+//! reconciliation logic that may be needed in the future.
+
 use bevy::prelude::*;
-use shared::messages::ServerToClientPlayerUpdate;
-use shared::physics::{LinearVelocity, MovementMode};
-
-use crate::agents::PlayerControlled;
-use crate::network::CurrentPlayerProfile;
-use shared::net::input_history::InputHistory;
-
-/// Threshold for position correction. If the difference between predicted and actual
-/// client position is less than this, we don't correct (to avoid jitter).
-pub const POSITION_ERROR_IGNORE_THRESHOLD_METERS: f32 = 0.05;
-
-/// Maximum allowed position error before we force a hard snap (teleport).
-/// Below this threshold, we interpolate smoothly.
-pub const POSITION_ERROR_HARD_SNAP_THRESHOLD_METERS: f32 = 2.0;
-
-/// Interpolation factor for smooth corrections (0.0 = no correction, 1.0 = instant snap).
-pub const CORRECTION_LERP_FACTOR: f32 = 0.3;
 
 pub struct ServerAuthorityReconciliationPlugin;
 
 impl Plugin for ServerAuthorityReconciliationPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(Update, reconcile_with_server_authority);
+    fn build(&self, _app: &mut App) {
+        // Lightyear handles prediction rollback automatically.
+        // Additional reconciliation systems can be added here if needed.
     }
 }
 
-pub fn reconcile_with_server_authority(
-    mut ev_update: MessageReader<ServerToClientPlayerUpdate>,
-    mut player_query: Query<
-        (&mut Transform, &mut LinearVelocity, &mut MovementMode),
-        With<PlayerControlled>,
-    >,
-    current_player: Res<CurrentPlayerProfile>,
-    mut input_history: ResMut<InputHistory>,
-) {
-    for event in ev_update.read() {
-        // Only process updates for our own player
-        if event.id != current_player.id {
-            continue;
-        }
-
-        // Remove acknowledged inputs (server has processed these)
-        let acked_count = input_history.ack_until(event.last_ack_time);
-
-        if acked_count > 0 {
-            debug!(
-                "Acknowledged {} inputs (remaining: {})",
-                acked_count,
-                input_history.unacknowledged.len()
-            );
-        }
-
-        let Ok((mut transform, mut linear_velocity, mut movement_mode)) = player_query.single_mut()
-        else {
-            warn!("No local player entity found for reconciliation");
-            continue;
-        };
-
-        // Update movement mode if it differs
-        if event.movement_mode != *movement_mode {
-            info!(
-                "Movement mode corrected: {:?} -> {:?}",
-                *movement_mode, event.movement_mode
-            );
-            *movement_mode = event.movement_mode;
-        }
-
-        // Calculate position error
-        let position_error = (event.position - transform.translation).length();
-
-        if position_error < POSITION_ERROR_IGNORE_THRESHOLD_METERS {
-            // Prediction is accurate - no position correction needed
-            // Just sync velocity to keep future predictions accurate
-            linear_velocity.0 = event.velocity;
-            continue;
-        }
-
-        if position_error > POSITION_ERROR_HARD_SNAP_THRESHOLD_METERS {
-            // Large error - hard snap to server position
-            warn!(
-                "Large position error ({:.2}m), hard snapping to server position",
-                position_error
-            );
-            transform.translation = event.position;
-            linear_velocity.0 = event.velocity;
-        } else {
-            // Small error - smoothly correct toward server position
-            debug!(
-                "Position error: {:.3}m, applying smooth correction",
-                position_error,
-            );
-            transform.translation = transform
-                .translation
-                .lerp(event.position, CORRECTION_LERP_FACTOR);
-            linear_velocity.0 = event.velocity;
-        }
-    }
-}

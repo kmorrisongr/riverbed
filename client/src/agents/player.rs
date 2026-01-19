@@ -1,18 +1,11 @@
-use crate::sounds::{on_item_get, BlockSoundCD, FootstepCD};
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 use serde::{Deserialize, Serialize};
-use shared::physics::DynamicPlayerPhysicsBundle;
 use shared::world::pos::pos2d::ColPos;
 use shared::world::pos::PlayerCol;
-use shared::{
-    block::Block,
-    items::{item_slots::ItemHolder, new_inventory, InventoryTrait, Item, Stack},
-    world::{realm::Realm, BlockRayCastHit},
-    DEFAULT_SPAWN_POSITION,
-};
+use shared::world::{realm::Realm, BlockRayCastHit};
 
-use super::{block_action::BlockActionPlugin, Crouching};
+use super::block_action::BlockActionPlugin;
 use shared::net::lightyear_inputs::PlayerInputAction;
 pub const HOTBAR_SLOTS: usize = 8;
 
@@ -25,17 +18,16 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(BlockActionPlugin)
             .add_plugins(InputManagerPlugin::<PlayerInputAction>::default())
-            .add_systems(
-                Startup,
-                (spawn_player, ApplyDeferred).chain().in_set(PlayerSpawn),
-            )
             .add_systems(Update, update_player_col);
     }
 }
 
+/// Marker component for the locally controlled player entity.
+/// Added by lightyear_client when the character is replicated and predicted.
 #[derive(Component)]
 pub struct PlayerControlled;
 
+/// The block the player is currently targeting (raycast result).
 #[derive(Component)]
 pub struct TargetBlock(pub Option<BlockRayCastHit>);
 
@@ -68,7 +60,8 @@ impl Default for KeyBindsConfig {
     }
 }
 
-fn configured_input_map() -> InputMap<PlayerInputAction> {
+/// Load the configured input map from key_bindings.toml or use defaults.
+pub fn configured_input_map() -> InputMap<PlayerInputAction> {
     let cfg: KeyBindsConfig = confy::load_path("key_bindings.toml").unwrap_or_default();
 
     let mut map = InputMap::default();
@@ -89,35 +82,6 @@ fn configured_input_map() -> InputMap<PlayerInputAction> {
     map.insert(PlayerInputAction::ToggleFly, GamepadButton::West);
 
     map
-}
-
-pub fn spawn_player(mut commands: Commands) {
-    let realm = Realm::Overworld;
-    let mut inventory = new_inventory::<HOTBAR_SLOTS>();
-    inventory.try_add(Stack::Some(Item::Block(Block::Smelter), 1));
-    inventory.try_add(Stack::Some(Item::Coal, 20));
-    inventory.try_add(Stack::Some(Item::IronOre, 50));
-    let transform = Transform {
-        translation: DEFAULT_SPAWN_POSITION,
-        ..default()
-    };
-    commands
-        .spawn((
-            transform,
-            Visibility::default(),
-            realm,
-            DynamicPlayerPhysicsBundle::from_transform(&transform, realm),
-            TargetBlock(None),
-            ItemHolder::Inventory(inventory),
-            PlayerControlled,
-            Crouching(false),
-        ))
-        .insert(SpatialListener::new(0.3))
-        .insert((FootstepCD(0.), BlockSoundCD(0.)))
-        // Leafwing bundle was removed; insert components directly
-        .insert(configured_input_map())
-        .insert(ActionState::<PlayerInputAction>::default())
-        .observe(on_item_get);
 }
 
 /// Updates the PlayerCol component when the player moves to a different chunk column.
@@ -148,3 +112,4 @@ fn update_player_col(
         }
     }
 }
+

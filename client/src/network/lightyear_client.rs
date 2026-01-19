@@ -1,7 +1,5 @@
-#![allow(dead_code)]
-//! Lightyear client bootstrap: configures the client plugin stack, spawns a
-//! netcode-backed connection, and keeps capturing inputs for later timeline
-//! ingestion. Feature-gated behind `lightyear-net` so Renet remains default.
+//! Lightyear client networking: configures the client plugin stack, spawns a
+//! netcode-backed connection, handles character replication and input sync.
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
@@ -26,10 +24,12 @@ use shared::physics::{
 use shared::world::realm::Realm;
 use shared::{PROTOCOL_ID, TICKS_PER_SECOND};
 
-use crate::agents::{PlayerControlled, TargetBlock};
+use crate::agents::player::configured_input_map;
+use crate::agents::{Crouching, PlayerControlled, TargetBlock};
 use crate::network::buffered_client::{SyncTime, SyncTimeExt};
 use crate::network::setup::{CurrentPlayerProfile, TargetServer};
 use crate::render::FpsCam;
+use crate::sounds::{on_item_get, BlockSoundCD, FootstepCD};
 use crate::ui::SelectedHotbarSlot as UiSelectedHotbarSlot;
 
 const LIGHTYEAR_DEV_PRIVATE_KEY: [u8; PRIVATE_KEY_BYTES] = [0; PRIVATE_KEY_BYTES];
@@ -200,21 +200,37 @@ fn handle_new_character(
     for (entity, is_controlled) in &character_query {
         if is_controlled {
             info!(
-                "Adding InputMap to controlled and predicted character {entity:?}"
+                "Setting up controlled and predicted character {entity:?}"
             );
-            commands.entity(entity).insert((
-                PlayerInputAction::default_input_map(),
-                ActionState::<PlayerInputAction>::default(),
-                PlayerControlled,
-                // Add CameraOrientation so we can replicate it to the server.
-                CameraOrientation::default(),
-                // Add SelectedHotbarSlot so we can replicate it to the server.
-                SelectedHotbarSlot::default(),
-                // TargetBlock is needed for block interaction (raycast result).
-                TargetBlock(None),
-            ));
+            commands
+                .entity(entity)
+                .insert((
+                    // Use configured input map (loaded from key_bindings.toml).
+                    configured_input_map(),
+                    ActionState::<PlayerInputAction>::default(),
+                    // Mark as locally controlled player.
+                    PlayerControlled,
+                    // Add CameraOrientation so we can replicate it to the server.
+                    CameraOrientation::default(),
+                    // Add SelectedHotbarSlot so we can replicate it to the server.
+                    SelectedHotbarSlot::default(),
+                    // TargetBlock is needed for block interaction (raycast result).
+                    TargetBlock(None),
+                    // Crouching state for movement.
+                    Crouching(false),
+                    // Visibility for rendering.
+                    Visibility::default(),
+                ))
+                // Sound effect cooldowns.
+                .insert((FootstepCD(0.), BlockSoundCD(0.)))
+                // Spatial audio listener.
+                .insert(SpatialListener::new(0.3))
+                // Observer for item pickup sounds.
+                .observe(on_item_get);
         } else {
             info!("Remote character predicted for us: {entity:?}");
+            // Remote characters just need visibility for rendering.
+            commands.entity(entity).insert(Visibility::default());
         }
 
         info!(?entity, "Adding physics bundle to character");
