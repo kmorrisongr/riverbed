@@ -45,9 +45,14 @@ pub struct StaticChunkColliderBundle {
 impl StaticChunkColliderBundle {
     /// Create a new static chunk collider bundle from a chunk.
     ///
+    /// # Arguments
+    /// * `chunk` - The chunk to generate a collider for
+    /// * `chunk_pos` - Position of the chunk in world coordinates
+    /// * `lod` - Level of detail (1 = full detail, higher = more simplified)
+    ///
     /// Returns `None` if the chunk has no solid geometry (all air).
-    pub fn new(chunk: &Chunk, chunk_pos: ChunkPos) -> Option<Self> {
-        let collider = generate_chunk_trimesh_collider(chunk)?;
+    pub fn new(chunk: &Chunk, chunk_pos: ChunkPos, lod: usize) -> Option<Self> {
+        let collider = generate_chunk_trimesh_collider(chunk, lod)?;
         Some(Self::from_collider(collider, chunk_pos))
     }
 
@@ -78,9 +83,13 @@ impl StaticChunkColliderBundle {
 /// This extracts the surface quads from the chunk using greedy meshing,
 /// then converts them to triangles for the physics collider.
 ///
+/// # Arguments
+/// * `chunk` - The chunk to generate a collider for
+/// * `lod` - Level of detail (1 = full detail, higher = more simplified)
+///
 /// Returns `None` if the chunk has no solid geometry.
-pub fn generate_chunk_trimesh_collider(chunk: &Chunk) -> Option<Collider> {
-    let quads = extract_quads(chunk, 1);
+pub fn generate_chunk_trimesh_collider(chunk: &Chunk, lod: usize) -> Option<Collider> {
+    let quads = extract_quads(chunk, lod);
 
     if quads.is_empty() {
         return None;
@@ -142,7 +151,7 @@ mod tests {
     #[test]
     fn test_empty_chunk_no_collider() {
         let chunk = Chunk::new();
-        let collider = generate_chunk_trimesh_collider(&chunk);
+        let collider = generate_chunk_trimesh_collider(&chunk, 1);
         assert!(collider.is_none());
     }
 
@@ -153,7 +162,7 @@ mod tests {
         let mut chunk = Chunk::new();
         chunk.set((1, 1, 1), Block::Granite);
 
-        let collider = generate_chunk_trimesh_collider(&chunk);
+        let collider = generate_chunk_trimesh_collider(&chunk, 1);
         assert!(collider.is_some());
     }
 
@@ -171,7 +180,7 @@ mod tests {
             realm: Realm::Overworld,
         };
 
-        let bundle = StaticChunkColliderBundle::new(&chunk, chunk_pos);
+        let bundle = StaticChunkColliderBundle::new(&chunk, chunk_pos, 1);
         assert!(bundle.is_some());
     }
 }

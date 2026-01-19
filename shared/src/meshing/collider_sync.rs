@@ -28,6 +28,21 @@ use super::chunk_collider::generate_chunk_trimesh_collider;
 #[derive(Message, Debug, Clone, Copy)]
 pub struct ChunkColliderRebuildRequest {
     pub chunk_pos: ChunkPos,
+    /// Level of detail for the collider (1 = full detail, higher = more simplified).
+    /// Defaults to 1 if not specified.
+    pub lod: usize,
+}
+
+impl ChunkColliderRebuildRequest {
+    /// Create a new rebuild request with full detail (LOD 1).
+    pub fn new(chunk_pos: ChunkPos) -> Self {
+        Self { chunk_pos, lod: 1 }
+    }
+
+    /// Create a new rebuild request with specified LOD.
+    pub fn with_lod(chunk_pos: ChunkPos, lod: usize) -> Self {
+        Self { chunk_pos, lod }
+    }
 }
 
 /// Registry mapping chunk positions to their static physics collider entities.
@@ -46,9 +61,10 @@ pub struct ChunkColliderInFlight {
 }
 
 /// Pending chunk positions waiting to be cooked (coalesced per chunk).
+/// Maps chunk position to the requested LOD level.
 #[derive(Resource, Default)]
 pub struct ChunkColliderPending {
-    pub pending: HashSet<ChunkPos>,
+    pub pending: HashMap<ChunkPos, usize>,
 }
 
 #[derive(Resource)]
@@ -60,6 +76,7 @@ pub struct ChunkColliderResultReceiver(pub Receiver<ChunkColliderResult>);
 struct ChunkColliderJob {
     chunk_pos: ChunkPos,
     chunk: Arc<Chunk>,
+    lod: usize,
 }
 
 struct ChunkColliderResult {
@@ -95,7 +112,7 @@ fn setup_collider_worker(mut commands: Commands) {
                 while let Ok(job) = job_receiver.recv() {
                     // Catch panics during collider cooking to avoid killing the worker thread.
                     let cooked = catch_unwind(AssertUnwindSafe(|| {
-                        generate_chunk_trimesh_collider(&job.chunk).map(|collider| {
+                        generate_chunk_trimesh_collider(&job.chunk, job.lod).map(|collider| {
                             StaticChunkColliderBundle::from_collider(collider, job.chunk_pos)
                         })
                     }));
@@ -139,28 +156,36 @@ pub fn queue_collider_cook_tasks<P: ChunkProvider + Resource>(
     };
 
     // Coalesce incoming events; we only need one pending entry per chunk.
+    // If multiple requests come for the same chunk, use the lowest (most detailed) LOD.
     for event in events.read() {
-        pending.pending.insert(event.chunk_pos);
+        pending
+            .pending
+            .entry(event.chunk_pos)
+            .and_modify(|existing_lod| *existing_lod = (*existing_lod).min(event.lod))
+            .or_insert(event.lod);
     }
 
     let mut spawned = 0usize;
 
     // Start up to the frame budget from the pending set, skipping chunks already cooking
-    let mut to_start: Vec<ChunkPos> = pending
+    let mut to_start: Vec<(ChunkPos, usize)> = pending
         .pending
         .iter()
-        .filter(|pos| !in_flight.in_flight.contains(*pos))
-        .cloned()
+        .filter(|(pos, _)| !in_flight.in_flight.contains(*pos))
+        .map(|(pos, lod)| (*pos, *lod))
         .take(MAX_NEW_COOK_TASKS_PER_TICK)
         .collect();
 
-    for chunk_pos in to_start.drain(..) {
+    for (chunk_pos, lod) in to_start.drain(..) {
         let Some(chunk) = chunk_provider.get_chunk(chunk_pos) else {
             // Keep pending if chunk not available; will retry later
             continue;
         };
 
-        match job_sender.0.try_send(ChunkColliderJob { chunk_pos, chunk }) {
+        match job_sender
+            .0
+            .try_send(ChunkColliderJob { chunk_pos, chunk, lod })
+        {
             Ok(()) => {
                 pending.pending.remove(&chunk_pos);
                 in_flight.in_flight.insert(chunk_pos);

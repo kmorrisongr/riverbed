@@ -38,9 +38,9 @@ pub fn update_world_from_network(
                             }
 
                             // Request the collider system to generate a static collider for this chunk
-                            ev_collider_rebuild.write(ChunkColliderRebuildRequest {
-                                chunk_pos: chunk_position,
-                            });
+                            ev_collider_rebuild.write(ChunkColliderRebuildRequest::new(
+                                chunk_position,
+                            ));
                         }
 
                         debug!("Received and processed {} chunks from server", chunk_count);
