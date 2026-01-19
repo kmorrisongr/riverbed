@@ -78,6 +78,8 @@ const MAX_NEW_COOK_TASKS_PER_TICK: usize = 8;
 const COLLIDER_QUEUE_CAPACITY: usize = 128;
 /// Number of threads dedicated to collider cooking.
 const COLLIDER_WORKER_THREADS: usize = 2;
+/// Maximum number of cooked colliders to apply per frame to avoid long stalls.
+const MAX_COLLIDER_APPLIES_PER_TICK: usize = 16;
 
 fn setup_collider_worker(mut commands: Commands) {
     let (job_sender, job_receiver) = bounded::<ChunkColliderJob>(COLLIDER_QUEUE_CAPACITY);
@@ -180,6 +182,8 @@ pub fn apply_finished_collider_cooks(
         return;
     };
 
+    let mut applied = 0usize;
+
     for ChunkColliderResult { chunk_pos, bundle } in results.0.try_iter() {
         // Remove old collider entity if present
         if let Some(old_entity) = collider_entities.entities.remove(&chunk_pos) {
@@ -194,6 +198,11 @@ pub fn apply_finished_collider_cooks(
 
         // Mark job complete
         in_flight.in_flight.remove(&chunk_pos);
+
+        applied += 1;
+        if applied >= MAX_COLLIDER_APPLIES_PER_TICK {
+            break;
+        }
     }
 }
 
