@@ -4,8 +4,6 @@
 //! algorithm. The extracted quads can then be converted to either render meshes
 //! (on the client) or collision meshes (for avian3d physics).
 
-use std::collections::BTreeSet;
-
 use binary_greedy_meshing as bgm;
 
 use crate::block::{Block, Face};
@@ -89,18 +87,33 @@ pub fn extract_quads(chunk: &Chunk, lod: usize) -> ChunkQuads {
     let voxels = voxel_data_lod(chunk, lod);
     let palette = chunk.palette.clone();
 
+    // Precompute transparency flags once per chunk
+    let mut is_transparent = vec![false; palette.iter().len()];
+    for (i, block) in palette.iter().enumerate() {
+        if i != 0 && !block.is_opaque() {
+            is_transparent[i] = true;
+        }
+    }
+
     let mut mesher: bgm::Mesher<CHUNK_S1> = bgm::Mesher::new();
 
-    // Build set of transparent block indices for the mesher
-    let transparents = BTreeSet::from_iter(palette.iter().enumerate().filter_map(|(i, block)| {
-        if i != 0 && !block.is_opaque() {
-            Some(i as u16)
-        } else {
-            None
-        }
-    }));
+    // Build bit masks for fast meshing (avoids BTreeSet lookups)
+    let mut opaque_mask = vec![0u64; bgm::Mesher::<CHUNK_S1>::CS_P2];
+    let mut trans_mask = vec![0u64; bgm::Mesher::<CHUNK_S1>::CS_P2];
 
-    mesher.mesh(&voxels, &transparents);
+    for (i, voxel) in voxels.iter().enumerate() {
+        if *voxel == 0 {
+            continue;
+        }
+        let (col, bit) = (i / bgm::Mesher::<CHUNK_S1>::CS_P, i % bgm::Mesher::<CHUNK_S1>::CS_P);
+        if is_transparent[*voxel as usize] {
+            trans_mask[col] |= 1 << bit;
+        } else {
+            opaque_mask[col] |= 1 << bit;
+        }
+    }
+
+    mesher.fast_mesh(&voxels, &opaque_mask, &trans_mask);
 
     let mut faces: [Vec<QuadData>; 6] = core::array::from_fn(|_| Vec::new());
 
