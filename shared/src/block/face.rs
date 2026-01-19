@@ -125,6 +125,79 @@ fn vertex_info(xyz: u32, u: u32, v: u32) -> u32 {
 }
 
 impl Face {
+    /// Get the 4 corner vertices of a quad for this face.
+    ///
+    /// Given a base position (x, y, z) and quad dimensions (width, height),
+    /// returns the 4 corners in chunk-local space. The vertex order is
+    /// consistent for use with standard triangle indices.
+    ///
+    /// This is the canonical source of quad geometry used by both
+    /// collision mesh generation and (indirectly) rendering.
+    #[inline]
+    pub fn quad_vertices(&self, x: f32, y: f32, z: f32, w: f32, h: f32) -> [[f32; 3]; 4] {
+        match self {
+            Face::Left => [
+                [x, y, z],
+                [x, y, z + h],
+                [x, y + w, z],
+                [x, y + w, z + h],
+            ],
+            Face::Right => [
+                [x + 1.0, y, z],
+                [x + 1.0, y + w, z],
+                [x + 1.0, y, z + h],
+                [x + 1.0, y + w, z + h],
+            ],
+            Face::Down => [
+                [x, y, z],
+                [x + w, y, z],
+                [x, y, z + h],
+                [x + w, y, z + h],
+            ],
+            Face::Up => [
+                [x, y + 1.0, z],
+                [x, y + 1.0, z + h],
+                [x + w, y + 1.0, z],
+                [x + w, y + 1.0, z + h],
+            ],
+            Face::Back => [
+                [x, y, z],
+                [x, y + h, z],
+                [x + w, y, z],
+                [x + w, y + h, z],
+            ],
+            Face::Front => [
+                [x, y, z + 1.0],
+                [x + w, y, z + 1.0],
+                [x, y + h, z + 1.0],
+                [x + w, y + h, z + 1.0],
+            ],
+        }
+    }
+
+    /// Get triangle indices for a quad with correct winding order.
+    ///
+    /// The winding order is set so that the normal points outward from the solid block.
+    /// Returns two triangles (6 indices total) as `([u32; 3], [u32; 3])`.
+    #[inline]
+    pub fn triangle_indices(&self, base: u32) -> ([u32; 3], [u32; 3]) {
+        match self {
+            // Outward-facing normals (counter-clockwise when viewed from outside)
+            Face::Right | Face::Up | Face::Front => {
+                ([base, base + 1, base + 2], [base + 2, base + 1, base + 3])
+            }
+            // Inward-facing normals need opposite winding
+            Face::Left | Face::Down | Face::Back => {
+                ([base, base + 2, base + 1], [base + 2, base + 3, base + 1])
+            }
+        }
+    }
+}
+
+impl Face {
+    // Note: This method will become unnecessary when we have instancing,
+    // because it is used to convert a quad to 4 vertices which we won't need to do.
+    // It packs position + UV into u32 for the GPU shader.
     pub fn vertices_packed(&self, xyz: u32, w: u32, h: u32, lod: u32) -> [u32; 4] {
         let xyz = xyz * lod;
         let w_ = w * lod;
