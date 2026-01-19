@@ -19,6 +19,7 @@ crossbeam = "*"
 hashbrown = "*"
 itertools = "*"
 json5 = "*"
+lightyear = { version = "0.25", features = ["avian3d", "crossbeam", "leafwing"] }
 packed-uints = "*"
 parking_lot = "*"
 rand = "0.9"

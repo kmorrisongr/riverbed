@@ -16,6 +16,7 @@ bincode = { workspace = true }
 clap = { workspace = true }
 crossbeam = { workspace = true }
 itertools = { workspace = true }
+lightyear = { workspace = true }
 packed-uints = { workspace = true }
 parking_lot = { workspace = true }
 ron = { workspace = true }
