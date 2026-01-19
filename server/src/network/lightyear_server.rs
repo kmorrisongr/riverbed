@@ -15,6 +15,9 @@ use lightyear::connection::client::Connected;
 use lightyear::netcode::{NetcodeServer, PRIVATE_KEY_BYTES};
 use lightyear::prelude::server::*;
 use lightyear::prelude::*;
+use shared::block::Block;
+use shared::items::{new_inventory, InventoryTrait, Item, Stack};
+use shared::items::item_slots::ItemHolder;
 use shared::messages::ActionMask;
 use shared::net::lightyear_inputs::{action_mask_from_leafwing, PlayerInputAction};
 use shared::net::lightyear_protocol::{CameraOrientation, CharacterMarker, LightyearProtocolPlugin, PlayerColor};
@@ -178,6 +181,12 @@ fn handle_connected(
     let spawn_position = DEFAULT_SPAWN_POSITION + offset;
 
     // Spawn the character with ActionState. The client will add their own InputMap.
+    // Create initial inventory with starter items.
+    let mut inventory = new_inventory::<8>(); // 8-slot hotbar
+    inventory.try_add(Stack::Some(Item::Block(Block::Smelter), 1));
+    inventory.try_add(Stack::Some(Item::Coal, 20));
+    inventory.try_add(Stack::Some(Item::IronOre, 50));
+
     let character = commands
         .spawn((
             Name::new(format!("Player-{}", client_id)),
@@ -185,6 +194,8 @@ fn handle_connected(
             ActionState::<PlayerInputAction>::default(),
             // Camera orientation - replicated from client to server for directional movement.
             CameraOrientation::default(),
+            // Player inventory - server-authoritative, replicated to clients.
+            ItemHolder::Inventory(inventory),
             // Replication configuration.
             Replicate::to_clients(NetworkTarget::All),
             PredictionTarget::to_clients(NetworkTarget::All),

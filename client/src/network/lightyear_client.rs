@@ -24,7 +24,7 @@ use shared::physics::{
 use shared::world::realm::Realm;
 use shared::{PROTOCOL_ID, TICKS_PER_SECOND};
 
-use crate::agents::PlayerControlled;
+use crate::agents::{PlayerControlled, TargetBlock};
 use crate::network::buffered_client::{SyncTime, SyncTimeExt};
 use crate::network::setup::{CurrentPlayerProfile, TargetServer};
 use crate::render::FpsCam;
@@ -203,6 +203,8 @@ fn handle_new_character(
                 PlayerControlled,
                 // Add CameraOrientation so we can replicate it to the server.
                 CameraOrientation::default(),
+                // TargetBlock is needed for block interaction (raycast result).
+                TargetBlock(None),
             ));
         } else {
             info!("Remote character predicted for us: {entity:?}");

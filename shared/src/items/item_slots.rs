@@ -47,7 +47,7 @@ pub mod inventory_serde {
 
 // TODO: If/When trait queries get adopted by Bevy (https://github.com/bevyengine/bevy/issues/15970)
 // get rid of this enum and use a trait instead, item holding components will implement this trait
-#[derive(Component, Serialize, Deserialize, Debug, Clone)]
+#[derive(Component, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ItemHolder {
     Furnace {
         fuel: Stack,

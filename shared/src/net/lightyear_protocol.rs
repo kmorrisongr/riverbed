@@ -6,6 +6,7 @@ use lightyear::prelude::input::leafwing;
 use lightyear::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::items::item_slots::ItemHolder;
 use crate::net::lightyear_inputs::PlayerInputAction;
 use crate::physics::{LinearVelocity, Position, Rotation, PLAYER_GRAVITY};
 use crate::physics::MovementMode;
@@ -95,6 +96,11 @@ impl Plugin for LightyearProtocolPlugin {
         app.register_component::<MovementMode>()
             .add_prediction()
             .add_should_rollback(movement_mode_should_rollback);
+
+        // ItemHolder is server-authoritative. Server validates all inventory operations
+        // and replicates the state to clients. No prediction needed since item
+        // transactions are not latency-sensitive like movement.
+        app.register_component::<ItemHolder>();
     }
 }
 
