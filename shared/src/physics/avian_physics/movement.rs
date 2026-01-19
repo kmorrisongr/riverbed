@@ -1,4 +1,4 @@
-//! Movement and kinematics shared by client and server, with avian3d resolving collisions.
+//! Movement and kinematics shared by client and server.
 
 use avian3d::prelude::LinearVelocity;
 use bevy::prelude::*;
@@ -6,38 +6,23 @@ use bevy::prelude::*;
 use crate::messages::{ActionMask, TransmittableAction};
 use crate::{FLY_SPEED, FLY_VERTICAL_SPEED, WALK_SPEED};
 
-/// Gravitational acceleration for players (units/s²).
-/// Higher values = faster falling.
 pub const PLAYER_GRAVITY: f32 = 50.0;
 
-/// Instantaneous vertical velocity applied when jumping (units/s).
 pub const PLAYER_JUMP_VELOCITY: f32 = 13.0;
 
-/// Radius of the player's capsule collider (meters).
 pub const PLAYER_CAPSULE_RADIUS: f32 = 0.3;
 
-/// Height of the cylindrical portion of the player's capsule collider.
-/// Total player height = PLAYER_CAPSULE_HEIGHT + 2 * PLAYER_CAPSULE_RADIUS = 1.7m
 pub const PLAYER_CAPSULE_HEIGHT: f32 = 1.1;
 
-/// Axis-aligned bounding box for querying blocks near the player's feet.
-/// Used for ground detection and stepped-block queries (footstep sounds, etc.).
-/// Format: (width, height, depth) in meters.
+/// AABB for querying blocks near the player's feet as (width, height, depth)
 pub const PLAYER_QUERY_BOUNDS: Vec3 = Vec3::new(0.6, 1.7, 0.6);
 
-/// Base acceleration rate for ground movement (units/s² per unit of friction).
-/// Combined with friction coefficient to determine how quickly velocity changes.
 pub const GROUND_ACCELERATION: f32 = 150.0;
 
-/// Friction coefficient when standing on ground.
-/// Higher values = more responsive movement (faster acceleration/deceleration).
 pub const GROUND_FRICTION: f32 = 8.0;
 
-/// Friction coefficient when airborne.
-/// Lower values = less air control (maintains momentum better).
 pub const AIR_FRICTION: f32 = 2.0;
 
-/// Represents the movement mode of an entity.
 #[derive(
     Component, Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
 )]
@@ -56,7 +41,6 @@ impl MovementMode {
     }
 }
 
-/// Input state for a single physics tick.
 #[derive(Debug, Clone, Default)]
 pub struct MovementInput {
     pub input_axes: Vec3,
@@ -66,11 +50,6 @@ pub struct MovementInput {
     pub camera_right: Vec3,
 }
 
-/// Result of computing a single frame of player movement.
-///
-/// This struct captures the output of velocity computation for a single physics tick.
-/// It's used by both client (for prediction) and server (for authoritative simulation)
-/// to ensure identical movement logic.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct MovementStepResult {
     pub velocity: Vec3,
@@ -78,10 +57,6 @@ pub struct MovementStepResult {
     pub movement_mode: MovementMode,
 }
 
-/// Compute the desired velocity for a player based on input and current state.
-///
-/// This implements "custom kinematics" - we compute what velocity we want,
-/// and avian3d handles collision resolution against chunk colliders.
 pub fn compute_player_desired_velocity(
     velocity: Vec3,
     movement_mode: MovementMode,
@@ -91,13 +66,11 @@ pub fn compute_player_desired_velocity(
 ) -> Vec3 {
     let mut velocity = velocity;
 
-    // Calculate world-space movement direction from input
     let forward_horizontal =
         Vec3::new(input.camera_forward.x, 0.0, input.camera_forward.z).normalize_or_zero();
     let right_horizontal =
         Vec3::new(input.camera_right.x, 0.0, input.camera_right.z).normalize_or_zero();
 
-    // Transform local movement direction to world space
     let world_move_dir = if input.input_axes.length_squared() > 0.0 {
         let local_dir = input.input_axes.normalize();
         forward_horizontal * local_dir.z + right_horizontal * local_dir.x
@@ -105,13 +78,11 @@ pub fn compute_player_desired_velocity(
         Vec3::ZERO
     };
 
-    // Calculate target horizontal velocity from input direction and mode speed
     let speed = movement_mode.speed();
     let target_velocity_xz = world_move_dir * speed;
 
     match movement_mode {
         MovementMode::Flying => {
-            // Flying mode: direct velocity control
             velocity.x = target_velocity_xz.x;
             velocity.z = target_velocity_xz.z;
             velocity.y = (input.jump as i32 - input.crouch as i32) as f32 * FLY_VERTICAL_SPEED;
@@ -119,19 +90,16 @@ pub fn compute_player_desired_velocity(
             velocity
         }
         MovementMode::Walking => {
-            // Handle jumping (apply impulse if grounded)
             if input.jump && on_ground {
                 velocity.y = PLAYER_JUMP_VELOCITY;
             }
 
-            // Use ground or air friction based on contact state
             let friction = if on_ground {
                 GROUND_FRICTION
             } else {
                 AIR_FRICTION
             };
 
-            // Smoothly accelerate horizontal velocity towards target
             let velocity_diff = Vec3::new(
                 target_velocity_xz.x - velocity.x,
                 0.0,
@@ -209,7 +177,6 @@ pub fn compute_velocity_from_player_actions(
             MovementMode::Flying => MovementMode::Walking,
         };
 
-        // Reset vertical velocity when returning to walking to avoid ghost motion
         if movement_mode == MovementMode::Walking {
             current_velocity = Vec3::ZERO;
         }
@@ -249,7 +216,6 @@ pub fn apply_player_input_to_physics(
         delta_seconds,
     );
 
-    // Write outputs back to components for simulation
     linear_velocity.0 = step.velocity;
     if step.movement_mode != *movement_mode {
         *movement_mode = step.movement_mode;

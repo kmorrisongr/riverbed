@@ -1,9 +1,4 @@
-//! Avian3d-based physics simulation for voxel worlds using chunk trimesh colliders.
-//!
-//! Key ideas:
-//! - Dynamic player bodies with capsule colliders and custom kinematics
-//! - Static chunk colliders built from voxel meshes
-//! - Shared movement code for client prediction and server authority
+//! Avian3d physics integration for voxel worlds.
 
 mod bundle;
 mod movement;

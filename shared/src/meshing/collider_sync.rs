@@ -1,9 +1,4 @@
 //! Systems for synchronizing chunk colliders with the world.
-//!
-//! This module provides Bevy systems that automatically spawn and despawn
-//! chunk collider entities as chunks are loaded and unloaded. It's designed
-//! to work with both client and server, receiving chunk change notifications
-//! via events.
 
 use bevy::prelude::*;
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender, TrySendError};
@@ -20,56 +15,37 @@ use crate::world::ColUnloadEvent;
 use super::chunk_collider::generate_chunk_trimesh_collider;
 use super::chunk_collider::StaticChunkColliderBundle;
 
-/// Event requesting that a chunk's static physics collider be (re)generated.
-///
-/// Sent when:
-/// - A new chunk is loaded and needs an initial collider
-/// - An existing chunk's blocks changed and the collider needs rebuilding
 #[derive(Message, Debug, Clone, Copy)]
 pub struct ChunkColliderRebuildRequest {
     pub chunk_pos: ChunkPos,
-    /// Level of detail for the collider (1 = full detail, higher = more simplified).
-    /// Defaults to 1 if not specified.
     pub lod: usize,
 }
 
 impl ChunkColliderRebuildRequest {
-    /// Create a new rebuild request with full detail (LOD 1).
     pub fn new(chunk_pos: ChunkPos) -> Self {
         Self { chunk_pos, lod: 1 }
     }
 
-    /// Create a new rebuild request with specified LOD.
     pub fn with_lod(chunk_pos: ChunkPos, lod: usize) -> Self {
         Self { chunk_pos, lod }
     }
 }
 
-/// Registry mapping chunk positions to their static physics collider entities.
-///
-/// This resource tracks which Entity is the physics collider for each chunk,
-/// allowing efficient lookup when colliders need to be updated or removed.
 #[derive(Resource, Default)]
 pub struct ChunkColliderEntityRegistry {
     pub entities: HashMap<ChunkPos, Entity>,
 }
 
-/// Tracks which chunks currently have collider cooking jobs running on worker threads.
 #[derive(Resource, Default)]
 pub struct ColliderCookingInProgress {
     pub chunks: HashSet<ChunkPos>,
 }
 
-/// Queue of chunks waiting to have their colliders cooked.
-/// Maps chunk position to the requested LOD level.
 #[derive(Resource, Default)]
 pub struct ColliderCookQueue {
     pub pending: HashMap<ChunkPos, usize>,
 }
 
-/// Tracks collider version per chunk to discard stale cook results.
-/// When a chunk is modified while cooking, the version increments and
-/// the old cook result (with lower version) is discarded.
 #[derive(Resource, Default)]
 pub struct ColliderVersionTracker {
     pub versions: HashMap<ChunkPos, u64>,
@@ -94,19 +70,13 @@ struct ColliderCookResult {
     version: u64,
 }
 
-/// Trait for accessing chunk data. Implemented by both ClientWorldMap and VoxelWorld.
 pub trait ChunkProvider: Send + Sync + 'static {
-    /// Get a chunk if it exists, returning a clone for thread safety.
     fn get_chunk(&self, pos: ChunkPos) -> Option<Arc<Chunk>>;
 }
 
-/// Maximum number of new collider cook jobs to dispatch per frame.
 const MAX_COOK_JOBS_PER_TICK: usize = 8;
-/// Capacity for the collider cook job queue.
 const COOK_JOB_QUEUE_CAPACITY: usize = 128;
-/// Number of threads dedicated to collider cooking.
 const COLLIDER_COOK_THREAD_COUNT: usize = 2;
-/// Maximum number of cooked colliders to spawn per frame to avoid long stalls.
 const MAX_COLLIDER_SPAWNS_PER_TICK: usize = 16;
 
 fn spawn_collider_cook_worker_threads(mut commands: Commands) {
@@ -170,8 +140,6 @@ pub fn dispatch_collider_cook_jobs<P: ChunkProvider + Resource>(
         return;
     };
 
-    // Coalesce incoming events; we only need one pending entry per chunk.
-    // If multiple requests come for the same chunk, use the lowest (most detailed) LOD.
     for event in events.read() {
         cook_queue
             .pending
@@ -182,7 +150,6 @@ pub fn dispatch_collider_cook_jobs<P: ChunkProvider + Resource>(
 
     let mut dispatched = 0usize;
 
-    // Start up to the frame budget from the pending set, skipping chunks already cooking
     let mut to_start: Vec<(ChunkPos, usize)> = cook_queue
         .pending
         .iter()
@@ -193,7 +160,6 @@ pub fn dispatch_collider_cook_jobs<P: ChunkProvider + Resource>(
 
     for (chunk_pos, lod) in to_start.drain(..) {
         let Some(chunk) = chunk_provider.get_chunk(chunk_pos) else {
-            // Keep pending if chunk not available; will retry later
             continue;
         };
 
@@ -213,7 +179,6 @@ pub fn dispatch_collider_cook_jobs<P: ChunkProvider + Resource>(
                 dispatched += 1;
             }
             Err(TrySendError::Full(_)) => {
-                // Worker queue is full; keep pending and try again next tick
                 warn!("Collider cook queue is full; deferring new jobs");
                 break;
             }
@@ -249,7 +214,6 @@ pub fn spawn_cooked_collider_entities(
         version: result_version,
     } in results.0.try_iter()
     {
-        // Drop stale results if a newer version was queued for the same chunk
         let current_version = version_tracker
             .versions
             .get(&chunk_pos)
@@ -260,18 +224,15 @@ pub fn spawn_cooked_collider_entities(
             continue;
         }
 
-        // Remove old collider entity if present
         if let Some(old_entity) = collider_entities.entities.remove(&chunk_pos) {
             commands.entity(old_entity).despawn();
         }
 
-        // Spawn new collider if one was generated
         if let Some(bundle) = bundle {
             let entity = commands.spawn(bundle).id();
             collider_entities.entities.insert(chunk_pos, entity);
         }
 
-        // Mark cooking complete
         cooking_in_progress.chunks.remove(&chunk_pos);
 
         spawned += 1;
@@ -292,7 +253,6 @@ pub fn despawn_colliders_for_unloaded_columns(
 ) {
     for event in events.read() {
         for chunk_pos in chunks_in_col(&event.0) {
-            // Cancel any pending or in-progress cook task for this chunk
             cook_queue.pending.remove(&chunk_pos);
             cooking_in_progress.chunks.remove(&chunk_pos);
             version_tracker.versions.remove(&chunk_pos);
@@ -304,15 +264,6 @@ pub fn despawn_colliders_for_unloaded_columns(
     }
 }
 
-/// Plugin that manages chunk colliders.
-///
-/// This plugin sets up the systems needed to automatically maintain chunk
-/// colliders as the world changes. It requires the physics plugin to be
-/// added separately.
-///
-/// Note: This plugin does NOT register `ColUnloadEvent` - the caller must
-/// ensure it's registered (typically via their world plugin) since it's
-/// a shared event used by multiple systems.
 pub struct ChunkColliderPlugin<P: ChunkProvider + Resource>(std::marker::PhantomData<P>);
 
 impl<P: ChunkProvider + Resource> Default for ChunkColliderPlugin<P> {
