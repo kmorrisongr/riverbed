@@ -47,6 +47,7 @@ pub struct TargetServer {
 pub fn launch_local_server_system(
     mut target: ResMut<TargetServer>,
     selected_world: Res<SelectedWorld>,
+    mut client_cfg: Option<ResMut<crate::network::lightyear_client::LightyearClientConfig>>,
 ) {
     if target.address.is_some() {
         debug!("Skipping launch local server - address already set");
@@ -83,6 +84,9 @@ pub fn launch_local_server_system(
         thread::sleep(Duration::from_millis(100));
 
         target.address = Some(address);
+        if let Some(cfg) = client_cfg.as_deref_mut() {
+            cfg.server_addr = address;
+        }
         info!("Local server launched, client will connect to {}", address);
     } else {
         error!("Error: No world selected. Unable to launch the server.");
