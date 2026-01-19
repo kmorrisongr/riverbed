@@ -8,17 +8,9 @@ use bevy::prelude::*;
 use rand::Rng;
 use shared::messages::PlayerId;
 use shared::{GameServerConfig, RENDER_DISTANCE, SOCKET_BIND_ERROR};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::thread;
 use std::time::Duration;
-
-/// Resource to supply a player name before profile creation.
-#[derive(Resource, Debug, Default)]
-pub struct PlayerNameSupplied {
-    pub name: String,
-}
 
 /// Resource tracking which world to load/connect to.
 #[derive(Resource, Debug, Clone)]
@@ -33,14 +25,6 @@ impl Default for SelectedWorld {
         }
     }
 }
-
-/// Server tick at the time of connection (for synchronization).
-#[derive(Resource, Default, Debug, Clone)]
-pub struct ServerTickAtConnect(pub u64);
-
-/// World seed received from server.
-#[derive(Resource, Default, Debug, Clone)]
-pub struct WorldSeed(pub u32);
 
 /// Current player's profile (ID and name).
 #[derive(Resource, Clone)]
@@ -60,22 +44,10 @@ impl CurrentPlayerProfile {
     }
 }
 
-fn hash_string_to_u64(input: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    input.hash(&mut hasher);
-    hasher.finish()
-}
-
 impl FromWorld for CurrentPlayerProfile {
     fn from_world(world: &mut World) -> Self {
-        let player_name = world.get_resource::<PlayerNameSupplied>();
-        match player_name {
-            Some(player_name) => Self {
-                id: hash_string_to_u64(&player_name.name),
-                name: player_name.name.clone(),
-            },
-            None => CurrentPlayerProfile::new(),
-        }
+        let _ = world; // silence unused warning while allowing FromWorld impl
+        CurrentPlayerProfile::new()
     }
 }
 

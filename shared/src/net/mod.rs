@@ -1,4 +1,3 @@
-pub mod clock;
 pub mod lightyear_protocol;
 pub mod lightyear_inputs;
 

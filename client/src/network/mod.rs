@@ -11,9 +11,7 @@ impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut App) {
         // Initialize resources needed by lightyear client
         app.init_resource::<CurrentPlayerProfile>()
-            .init_resource::<SelectedWorld>()
-            .init_resource::<ServerTickAtConnect>()
-            .init_resource::<WorldSeed>();
+            .init_resource::<SelectedWorld>();
 
         // Startup systems - launch local server if needed
         app.add_systems(Startup, launch_local_server_system);

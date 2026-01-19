@@ -14,7 +14,7 @@ use std::net::SocketAddr;
 #[cfg(feature = "logging")]
 use crate::logging::{InspectorDisplayPlugin, LogInspectorPlugin};
 use crate::render::{MeshOrderReceiver, MeshOrderSender};
-use agents::{ClientSideMovementPredictionPlugin, OtherPlayersPlugin, PlayerPlugin};
+use agents::{ClientSideMovementPredictionPlugin, PlayerPlugin};
 use bevy::{
     asset::AssetPlugin,
     image::{ImageAddressMode, ImageFilterMode, ImageSamplerDescriptor},
@@ -108,7 +108,6 @@ fn client(args: Args) {
             rng: ChaCha8Rng::seed_from_u64(SEED),
         })
         .add_plugins(PlayerPlugin)
-        .add_plugins(OtherPlayersPlugin)
         .add_plugins(TextureLoadPlugin)
         .add_plugins(UIPlugin)
         .add_plugins(ClientSideMovementPredictionPlugin)
