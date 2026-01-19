@@ -9,12 +9,14 @@ use bevy::log::info;
 use bevy::input::InputPlugin;
 use bevy::prelude::*;
 use bevy::transform::TransformPlugin;
-use lightyear::netcode::{generate_key, NetcodeServer, PRIVATE_KEY_BYTES};
+use lightyear::netcode::{NetcodeServer, PRIVATE_KEY_BYTES};
 use lightyear::prelude::server::*;
 use lightyear::prelude::*;
 use shared::messages::ActionMask;
 use shared::net::lightyear_protocol::LightyearProtocolPlugin;
 use shared::{PROTOCOL_ID, TICKS_PER_SECOND};
+
+const LIGHTYEAR_DEV_PRIVATE_KEY: [u8; PRIVATE_KEY_BYTES] = [0; PRIVATE_KEY_BYTES];
 
 /// Server networking settings for the Lightyear path.
 #[derive(Resource, Debug, Clone)]
@@ -33,7 +35,7 @@ impl Default for LightyearServerConfig {
         Self {
             bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 5000),
             protocol_id: PROTOCOL_ID,
-            private_key: generate_key(),
+            private_key: LIGHTYEAR_DEV_PRIVATE_KEY,
             max_clients: 64,
             keep_alive_hz: 10.0,
             client_timeout_secs: 10,
