@@ -108,7 +108,7 @@ fn quads_to_trimesh(quads: &ChunkQuads) -> (Vec<Vec3>, Vec<[u32; 3]>) {
         let face: Face = face_n.into();
 
         for quad in face_quads {
-            if !quad.block.is_traversable() {
+            if quad.block.is_traversable() {
                 continue;
             }
             let base_vertex = vertices.len() as u32;
