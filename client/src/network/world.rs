@@ -37,7 +37,6 @@ pub fn update_world_from_network(
                                 warn!("Failed to send mesh order for chunk {:?}", chunk_position);
                             }
 
-                            // Request the collider system to generate a static collider for this chunk
                             ev_collider_rebuild
                                 .write(ChunkColliderRebuildRequest::new(chunk_position));
                         }

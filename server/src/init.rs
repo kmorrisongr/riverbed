@@ -117,11 +117,9 @@ pub fn configure_server_app(
         ))),
     );
 
-    // Add asset and state plugins needed for avian3d physics
     app.add_plugins(AssetPlugin::default());
     app.add_plugins(StatesPlugin);
-    app.add_plugins(ScenePlugin); // provides SceneSpawner resource required by avian3d collider backend
-                                  // Register Mesh assets so avian3d collider cache has an AssetEvent channel even headless
+    app.add_plugins(ScenePlugin);
     app.init_asset::<Mesh>();
 
     // Optionally add log plugin (standalone server needs it, embedded doesn't)
@@ -134,10 +132,8 @@ pub fn configure_server_app(
     app.add_plugins(RenetServerPlugin);
     app.add_plugins(NetcodeServerPlugin);
 
-    // Physics plugin for collision detection
     app.add_plugins(SharedPhysicsWorldPlugin);
 
-    // Chunk collider plugin for physics
     app.add_plugins(ChunkColliderPlugin::<VoxelWorld>::default());
 
     // Always insert LogEventSender (needed by terrain thread), but only broadcast when configured

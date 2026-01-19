@@ -7,10 +7,7 @@ pub use avian3d::prelude::{
 
 use crate::world::realm::Realm;
 
-/// Build collision layers that isolate physics by realm.
-/// Each realm gets its own bit; colliders only filter to the same realm bit.
 pub fn collision_layers_for_realm(realm: Realm) -> CollisionLayers {
-    // Bit 0 is Avian's default layer; shift by 1 to keep realm bits separate.
     let realm_bit = 1u32 << (realm as u32 + 1);
     CollisionLayers::new(realm_bit, realm_bit)
 }

@@ -12,7 +12,6 @@ pub const PLAYER_CAPSULE_RADIUS: f32 = 0.3;
 
 pub const PLAYER_CAPSULE_HEIGHT: f32 = 1.1;
 
-/// AABB for querying blocks near the player's feet as (width, height, depth)
 pub const PLAYER_QUERY_BOUNDS: Vec3 = Vec3::new(0.6, 1.7, 0.6);
 
 pub const GROUND_ACCELERATION: f32 = 150.0;

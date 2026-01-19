@@ -1,16 +1,3 @@
-//! Server-authoritative reconciliation for client-side prediction.
-//!
-//! This module implements the client-side prediction and reconciliation system
-//! for a server-authoritative networking model. The server is the single source
-//! of truth (SSOT) for player positions.
-//!
-//! With avian3d physics, collision resolution is handled by the physics engine,
-//! so we can't simply replay inputs to predict position. Instead, we:
-//! 1. Client predicts movement locally using avian3d for responsive gameplay
-//! 2. Client sends inputs to server  
-//! 3. Server simulates authoritatively and broadcasts position updates
-//! 4. Client receives server state and smoothly corrects toward it
-
 use bevy::prelude::*;
 use shared::messages::ServerToClientPlayerUpdate;
 use shared::physics::{LinearVelocity, MovementMode};
@@ -30,11 +17,6 @@ pub const POSITION_ERROR_HARD_SNAP_THRESHOLD_METERS: f32 = 2.0;
 /// Interpolation factor for smooth corrections (0.0 = no correction, 1.0 = instant snap).
 pub const CORRECTION_LERP_FACTOR: f32 = 0.3;
 
-/// Plugin for reconciling client-predicted state with server-authoritative updates.
-///
-/// This implements the correction side of client-side prediction: when the server
-/// sends authoritative position updates, this plugin smoothly corrects the client's
-/// local state to match.
 pub struct ServerAuthorityReconciliationPlugin;
 
 impl Plugin for ServerAuthorityReconciliationPlugin {
@@ -43,11 +25,6 @@ impl Plugin for ServerAuthorityReconciliationPlugin {
     }
 }
 
-/// System that reconciles the local player's predicted state with server authority.
-///
-/// Since avian3d handles collision resolution, we can't replay inputs to predict
-/// position. Instead, we smoothly correct the client's position toward the
-/// server's authoritative position.
 pub fn reconcile_with_server_authority(
     mut ev_update: MessageReader<ServerToClientPlayerUpdate>,
     mut player_query: Query<
