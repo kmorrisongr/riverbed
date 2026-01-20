@@ -35,10 +35,6 @@ impl Default for ChunkClientConfig {
     }
 }
 
-/// Marker resource indicating the chunk client is connected
-#[derive(Resource)]
-pub struct ChunkClientConnected;
-
 /// Plugin for receiving chunk data from the server
 pub struct ChunkStreamingClientPlugin;
 
