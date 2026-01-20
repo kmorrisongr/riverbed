@@ -7,10 +7,7 @@ use crate::world::{
     terrain_thread::{assign_player_col, on_unload_col, send_player_pos_update, setup_load_thread},
 };
 use bevy::prelude::*;
-use shared::world::{block_entities::BlockEntities, pos::pos3d::ChunkPos, ColUnloadEvent};
-
-#[derive(Message)]
-pub struct ChunkChanged(pub ChunkPos);
+use shared::world::{block_entities::BlockEntities, ColUnloadEvent};
 
 /// System set for player position tracking, used for ordering constraints
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
