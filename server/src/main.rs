@@ -1,16 +1,16 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-use bevy::log::info;
-use bevy::prelude::*;
-use clap::Parser;
-use server::network::lightyear_server::{LightyearServerConfig, LightyearServerPlugin};
-use shared::{GameServerConfig, RENDER_DISTANCE};
-
 mod generation;
 mod init;
 mod logging;
 mod network;
-pub mod world;
+mod world;
+
+use bevy::log::info;
+use bevy::prelude::*;
+use clap::Parser;
+use crate::network::lightyear_server::{LightyearServerConfig, LightyearServerPlugin};
+use shared::{GameServerConfig, RENDER_DISTANCE};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
