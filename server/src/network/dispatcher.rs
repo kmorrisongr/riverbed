@@ -1,11 +1,10 @@
 use crate::network::block_interactions::{handle_block_interactions, BlockInteractionEvent};
-use crate::network::broadcast_world::{
-    ChunkBroadcastPlugin, ServerTick, ServerToClientChunkDeliveryTracker,
-};
+use crate::network::broadcast_world::{ChunkBroadcastPlugin, ChunkDeliveryTracker, ServerTick};
 use crate::network::players::{
     broadcast_player_updates_system, handle_player_inputs_system, ClientReportedPredictedPosition,
-    PlayerInputsEvent, PlayerRegistry, ServerPhysicsState,
+    PlayerInputsEvent, PlayerRegistry,
 };
+use crate::world::voxel_world::VoxelWorld;
 use bevy::log::info;
 use bevy::prelude::*;
 use bevy_renet::renet::{ClientId, RenetServer, ServerEvent};
@@ -14,7 +13,9 @@ use shared::messages::{
     ServerToClientMessage, ServerToClientPlayerSpawn,
 };
 use shared::net::clock;
-use shared::physics::MovementMode;
+use shared::physics::{
+    sync_block_beneath_feet, sync_grounded_state, DynamicPlayerPhysicsBundle, MovementMode,
+};
 use shared::world::realm::Realm;
 use shared::world::WorldSeed;
 use shared::GameServerConfig;
@@ -52,7 +53,13 @@ impl Plugin for ServerNetworkPlugin {
         app.add_systems(Update, handle_player_exit);
         app.add_systems(
             Update,
-            (handle_player_inputs_system, broadcast_player_updates_system).chain(),
+            (
+                sync_grounded_state::<NetworkPlayer>,
+                sync_block_beneath_feet::<NetworkPlayer, VoxelWorld>,
+                handle_player_inputs_system,
+                broadcast_player_updates_system,
+            )
+                .chain(),
         );
         app.add_systems(Update, handle_block_interactions);
     }
@@ -167,10 +174,10 @@ fn handle_auth_requests(
     mut ev_auth: MessageReader<IncomingAuthRequestEvent>,
     mut server: ResMut<RenetServer>,
     mut registry: ResMut<PlayerRegistry>,
-    mut chunk_tracker: ResMut<ServerToClientChunkDeliveryTracker>,
+    mut chunk_tracker: ResMut<ChunkDeliveryTracker>,
     tick: Res<ServerTick>,
     world_seed: Res<WorldSeed>,
-    existing_players: Query<(&NetworkPlayer, &Transform, Option<&ServerPhysicsState>)>,
+    existing_players: Query<(&NetworkPlayer, &Transform, &MovementMode)>,
 ) {
     use crate::network::players::DEFAULT_SPAWN_POSITION;
 
@@ -209,12 +216,15 @@ fn handle_auth_requests(
 
         let spawn_position = DEFAULT_SPAWN_POSITION;
 
+        let transform = Transform::from_translation(spawn_position);
+
+        let realm = Realm::Overworld;
         commands.spawn((
-            Transform::from_translation(spawn_position),
-            Realm::Overworld,
+            transform,
+            realm,
             NetworkPlayer { client_id },
-            ServerPhysicsState::default(),
             ClientReportedPredictedPosition(spawn_position),
+            DynamicPlayerPhysicsBundle::from_transform(&transform, realm),
         ));
         info!(
             "Spawned ECS entity for player {} at {:?}",
@@ -232,10 +242,8 @@ fn handle_auth_requests(
                 existing_players
                     .iter()
                     .find(|(np, _, _)| np.client_id == player.id)
-                    .map(|(_, transform, physics)| {
-                        let is_flying = physics
-                            .map(|p| p.movement_mode == MovementMode::Flying)
-                            .unwrap_or(false);
+                    .map(|(_, transform, movement_mode)| {
+                        let is_flying = *movement_mode == MovementMode::Flying;
                         (transform.translation, transform.rotation, is_flying)
                     })
                     .unwrap_or((DEFAULT_SPAWN_POSITION, Quat::IDENTITY, false))
@@ -302,7 +310,7 @@ fn handle_player_exit(
     mut ev_exit: MessageReader<ClientDisconnectRequestEvent>,
     mut server: ResMut<RenetServer>,
     mut registry: ResMut<PlayerRegistry>,
-    mut chunk_tracker: ResMut<ServerToClientChunkDeliveryTracker>,
+    mut chunk_tracker: ResMut<ChunkDeliveryTracker>,
     config: Res<GameServerConfig>,
     mut app_exit: MessageWriter<AppExit>,
 ) {

@@ -3,11 +3,8 @@ use bevy_renet::renet::{ClientId, RenetServer};
 use shared::messages::{
     ClientToServerPlayerInput, PlayerId, ServerToClientMessage, ServerToClientPlayerUpdate,
 };
-use shared::physics::{player_step::apply_player_input_step, MovementMode, PhysicsState};
-use shared::world::realm::Realm;
+use shared::physics::{apply_player_input_to_physics, Grounded, LinearVelocity, MovementMode};
 use std::collections::HashMap;
-
-use crate::world::voxel_world::VoxelWorld;
 
 use super::dispatcher::NetworkPlayer;
 use super::extensions::SendGameMessageExtension;
@@ -15,23 +12,21 @@ use super::extensions::SendGameMessageExtension;
 // Re-export from shared for backward compatibility
 pub use shared::DEFAULT_SPAWN_POSITION;
 
-#[derive(Component, Debug, Clone)]
-pub struct ServerPhysicsState {
-    pub velocity: Vec3,
-    pub movement_mode: MovementMode,
-    pub on_ground: bool,
-}
+// =============================================================================
+// Note: Ground state and block beneath feet updates now use shared systems from
+// shared::physics::ground_detection. See dispatcher.rs for system registration:
+// - sync_grounded_state::<NetworkPlayer>
+// - sync_block_beneath_feet::<NetworkPlayer, VoxelWorld>
+// =============================================================================
 
-impl Default for ServerPhysicsState {
-    fn default() -> Self {
-        Self {
-            velocity: Vec3::ZERO,
-            movement_mode: MovementMode::Walking,
-            on_ground: false,
-        }
-    }
-}
-
+/// The position the client predicted when sending its input (for diagnostics).
+///
+/// The client runs local physics prediction for responsive gameplay. When sending
+/// inputs to the server, it includes its predicted position. The server stores this
+/// to compare client prediction vs server authority (useful for debugging desync).
+///
+/// Note: This is NOT used for server simulation - the server computes position
+/// authoritatively. It's stored purely for diagnostic/debugging purposes.
 #[derive(Component, Debug, Clone, Default)]
 pub struct ClientReportedPredictedPosition(pub Vec3);
 
@@ -67,23 +62,19 @@ impl PlayerRegistry {
         self.players.insert(client_id, player);
     }
 
-    /// Remove a player from the registry
     pub fn remove_player(&mut self, client_id: ClientId) {
         info!("Removing player {} from registry", client_id);
         self.players.remove(&client_id);
     }
 
-    /// Get a mutable reference to a player
     pub fn get_player_mut(&mut self, client_id: ClientId) -> Option<&mut ServerPlayer> {
         self.players.get_mut(&client_id)
     }
 
-    /// Get an immutable reference to a player
     pub fn get_player(&self, client_id: ClientId) -> Option<&ServerPlayer> {
         self.players.get(&client_id)
     }
 
-    /// Check if a player is authenticated
     pub fn is_authenticated(&self, client_id: ClientId) -> bool {
         self.players
             .get(&client_id)
@@ -98,22 +89,16 @@ pub struct PlayerInputsEvent {
     pub input: ClientToServerPlayerInput,
 }
 
-/// Server-authoritative player input handling system.
-///
-/// This system receives player inputs from clients and simulates physics
-/// authoritatively on the server. The server is the single source of truth
-/// for player positions.
 pub fn handle_player_inputs_system(
     mut events: MessageReader<PlayerInputsEvent>,
     mut registry: ResMut<PlayerRegistry>,
     mut player_query: Query<(
         &NetworkPlayer,
-        &mut Transform,
-        &mut ServerPhysicsState,
+        &mut LinearVelocity,
+        &mut MovementMode,
         &mut ClientReportedPredictedPosition,
-        &Realm,
+        &Grounded,
     )>,
-    world: Res<VoxelWorld>,
 ) {
     for ev in events.read() {
         let Some(player) = registry.get_player_mut(ev.client_id) else {
@@ -129,9 +114,10 @@ pub fn handle_player_inputs_system(
             continue;
         }
 
-        let Some((_, mut transform, mut physics_state, mut predicted_pos, realm)) = player_query
-            .iter_mut()
-            .find(|(np, _, _, _, _)| np.client_id == ev.client_id)
+        let Some((_, mut linear_velocity, mut movement_mode, mut client_predicted_pos, grounded)) =
+            player_query
+                .iter_mut()
+                .find(|(np, _, _, _, _)| np.client_id == ev.client_id)
         else {
             warn!(
                 "No ECS entity found for authenticated player {}",
@@ -140,7 +126,7 @@ pub fn handle_player_inputs_system(
             continue;
         };
 
-        predicted_pos.0 = ev.input.predicted_position;
+        client_predicted_pos.0 = ev.input.predicted_position;
 
         // Drop stale/duplicate inputs based on last processed timestamp.
         if ev.input.time_ms <= player.last_input_processed {
@@ -148,27 +134,14 @@ pub fn handle_player_inputs_system(
         }
 
         let delta_seconds = ev.input.delta_ms as f32 / 1000.0;
-        let state = PhysicsState {
-            position: transform.translation,
-            velocity: physics_state.velocity,
-            movement_mode: physics_state.movement_mode,
-            realm: *realm,
-            on_ground: physics_state.on_ground,
-        };
-
-        let step = apply_player_input_step(
-            &*world,
-            &state,
+        apply_player_input_to_physics(
+            &mut linear_velocity,
+            &mut movement_mode,
+            grounded.0,
             &ev.input.inputs,
             &ev.input.camera,
             delta_seconds,
         );
-
-        transform.translation = step.position;
-        transform.rotation = ev.input.camera.rotation;
-        physics_state.velocity = step.velocity;
-        physics_state.on_ground = step.on_ground;
-        physics_state.movement_mode = step.movement_mode;
 
         player.last_input_processed = ev.input.time_ms;
     }
@@ -177,15 +150,15 @@ pub fn handle_player_inputs_system(
 pub fn broadcast_player_updates_system(
     registry: Res<PlayerRegistry>,
     mut server: ResMut<RenetServer>,
-    player_query: Query<(&NetworkPlayer, &Transform, &ServerPhysicsState)>,
+    player_query: Query<(&NetworkPlayer, &Transform, &LinearVelocity, &MovementMode)>,
 ) {
     // Only broadcast authenticated players
     for player in registry.players.values().filter(|p| p.is_authenticated) {
-        // Get position, orientation, and physics state from ECS
+        // Get position, orientation, velocity, and movement mode from ECS components
         let (position, orientation, velocity, movement_mode) = player_query
             .iter()
-            .find(|(np, _, _)| np.client_id == player.id)
-            .map(|(_, t, ps)| (t.translation, t.rotation, ps.velocity, ps.movement_mode))
+            .find(|(np, _, _, _)| np.client_id == player.id)
+            .map(|(_, t, lv, mm)| (t.translation, t.rotation, lv.0, *mm))
             .unwrap_or((
                 DEFAULT_SPAWN_POSITION,
                 Quat::IDENTITY,

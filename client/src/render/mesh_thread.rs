@@ -1,9 +1,9 @@
 use crate::agents::PlayerControlled;
 use crate::render::mesh_draw::{choose_lod_level, LOD};
+use crate::render::mesh_logic::create_face_meshes;
 use crate::render::texture_array::TextureMap;
 use crate::world::ClientWorldMap;
 use bevy::prelude::*;
-use bevy::tasks::AsyncComputeTaskPool;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use parking_lot::RwLock;
 use shared::block::Face;
@@ -12,6 +12,7 @@ use shared::world::pos::pos2d::ColPos;
 use shared::world::pos::pos3d::ChunkPos;
 use shared::world::pos::PlayerCol;
 use std::collections::HashSet;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 use std::thread::yield_now;
 
@@ -22,15 +23,15 @@ pub fn setup_mesh_thread(
     shared_load_area: Res<SharedPlayerCol>,
     mesh_order_receiver: Res<MeshOrderReceiver>,
 ) {
-    let thread_pool = AsyncComputeTaskPool::get();
     let chunks = world.chunks.clone();
     let (mesh_sender, mesh_reciever) = unbounded();
     commands.insert_resource(MeshReciever(mesh_reciever));
     let texture_map = texture_map.0.clone();
     let mesh_order_receiver = mesh_order_receiver.0.clone();
     let shared_load_area = shared_load_area.0.clone();
-    thread_pool
-        .spawn(async move {
+    std::thread::Builder::new()
+        .name("mesh-worker".into())
+        .spawn(move || {
             // Busy wait until the texture map is loaded (ugly but only costly on startup)
             while texture_map.is_empty() {
                 yield_now()
@@ -70,14 +71,32 @@ pub fn setup_mesh_thread(
                 mesh_orders.remove(i);
                 mesh_cache.remove(&chunk_pos);
                 let lod = choose_lod_level(dist as u32);
-                let Some(chunk) = chunks.get(&chunk_pos) else {
+
+                // Clone the Arc<Chunk> - this is O(1), just an atomic increment.
+                // The chunk data itself is not copied.
+                let Some(chunk_arc) = chunks
+                    .get(&chunk_pos)
+                    .map(|e| Arc::clone(&*e.value().read()))
+                else {
                     continue;
                 };
-                let face_meshes =
-                    chunk
-                        .value()
-                        .read()
-                        .create_face_meshes(&texture_map, lod, chunk_pos);
+
+                // Catch meshing panics so the worker thread stays alive.
+                let meshed = catch_unwind(AssertUnwindSafe(|| {
+                    create_face_meshes(&chunk_arc, &texture_map, lod, chunk_pos)
+                }));
+
+                let face_meshes = match meshed {
+                    Ok(meshes) => meshes,
+                    Err(_) => {
+                        warn!(
+                            "Mesh generation panicked for chunk {:?}; skipping",
+                            chunk_pos
+                        );
+                        continue;
+                    }
+                };
+
                 trace!("{}", LogData::ChunkMeshed(chunk_pos));
                 for (i, face_mesh) in face_meshes.into_iter().enumerate() {
                     let face = i.into();
@@ -91,7 +110,7 @@ pub fn setup_mesh_thread(
                 }
             }
         })
-        .detach();
+        .expect("mesh worker thread spawn");
 }
 
 #[derive(Resource)]

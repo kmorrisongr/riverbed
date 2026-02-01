@@ -14,7 +14,7 @@ use std::net::SocketAddr;
 #[cfg(feature = "logging")]
 use crate::logging::{InspectorDisplayPlugin, LogInspectorPlugin};
 use crate::render::{MeshOrderReceiver, MeshOrderSender};
-use agents::{MovementPlugin, OtherPlayersPlugin, PlayerPlugin};
+use agents::{ClientSideMovementPredictionPlugin, OtherPlayersPlugin, PlayerPlugin};
 use bevy::{
     asset::AssetPlugin,
     image::{ImageAddressMode, ImageFilterMode, ImageSamplerDescriptor},
@@ -28,6 +28,7 @@ use network::NetworkPlugin;
 use rand_chacha::{rand_core::SeedableRng, ChaCha8Rng};
 use render::{Render, TextureLoadPlugin};
 use shared::logging::logging::RiverbedLogPlugin;
+use shared::physics::SharedPhysicsWorldPlugin;
 use shared::world::block_entities::BlockEntities;
 use shared::world::world_rng::WorldRng;
 use sounds::SoundPlugin;
@@ -96,6 +97,7 @@ fn client(args: Args) {
                 .disable::<LogPlugin>(),
         )
         .add_plugins(RiverbedLogPlugin)
+        .add_plugins(SharedPhysicsWorldPlugin)
         .insert_resource(network::TargetServer {
             address: args.server,
             ..default()
@@ -109,7 +111,7 @@ fn client(args: Args) {
         .add_plugins(OtherPlayersPlugin)
         .add_plugins(TextureLoadPlugin)
         .add_plugins(UIPlugin)
-        .add_plugins(MovementPlugin)
+        .add_plugins(ClientSideMovementPredictionPlugin)
         .add_plugins(Render)
         .add_plugins(SoundPlugin);
 

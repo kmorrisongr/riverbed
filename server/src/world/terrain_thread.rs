@@ -2,10 +2,9 @@ use crate::{
     generation::TerrainGenerator,
     logging::{LogEventSender, LogEventSenderExt},
     network::players::ClientReportedPredictedPosition,
-    world::{voxel_world::VoxelWorld, ColUnloadEvent},
+    world::voxel_world::VoxelWorld,
 };
 use bevy::prelude::*;
-use bevy::tasks::AsyncComputeTaskPool;
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use shared::{
     logging::logging::LogData,
@@ -13,6 +12,7 @@ use shared::{
         pos::{pos2d::ColPos, PlayerCol},
         realm::Realm,
         world_rng::WorldRng,
+        ColUnloadEvent,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -27,14 +27,14 @@ pub fn setup_load_thread(
     commands.insert_resource(PlayerColumnUpdateSender(player_pos_sender));
     let (unload_sender, unload_recv) = unbounded::<ColPos>();
     commands.insert_resource(ColUnloadsReciever(unload_recv));
-    let thread_pool = AsyncComputeTaskPool::get();
     let load_world = world.clone();
     let render_distance = world.render_distance;
     let seed_value = world_rng.seed;
     let log_sender = log_sender.clone();
 
-    thread_pool
-        .spawn(async move {
+    std::thread::Builder::new()
+        .name("terrain-worker".into())
+        .spawn(move || {
             let terrain_gen = TerrainGenerator::new(seed_value as u32);
             // local copy of players positions
             let mut players_pos = HashMap::new();
@@ -47,9 +47,15 @@ pub fn setup_load_thread(
                 loop {
                     // If to_load is empty, we block on player position updates to not waste resources
                     let player_pos_update = if to_load.is_empty() {
-                        player_pos_recv
-                            .recv()
-                            .expect("PlayerColumnUpdate channel is closed")
+                        match player_pos_recv.recv() {
+                            Ok(update) => update,
+                            Err(_) => {
+                                warn!(
+                                    "PlayerColumnUpdate channel is closed, stopping terrain thread"
+                                );
+                                break 'outer;
+                            }
+                        }
                     } else {
                         match player_pos_recv.try_recv() {
                             Ok(update) => update,
@@ -94,6 +100,9 @@ pub fn setup_load_thread(
                     }
                 }
                 // Generate the closest column to any player
+                if to_load.is_empty() {
+                    continue;
+                }
                 let (closest_idx, _closest_col) = to_load
                     .iter()
                     .enumerate()
@@ -112,7 +121,7 @@ pub fn setup_load_thread(
                 load_world.mark_change_col(col);
             }
         })
-        .detach();
+        .expect("terrain worker thread spawn");
 }
 
 pub fn assign_player_col(

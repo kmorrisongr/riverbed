@@ -1,4 +1,4 @@
-use bevy::{platform::collections::HashSet, prelude::*};
+use bevy::prelude::*;
 use shared::messages::ClientToServerPlayerInput;
 use shared::net::clock::TickClock;
 
@@ -14,7 +14,7 @@ impl CurrentFrameInputsExt for CurrentFrameInputs {
         self.0 = ClientToServerPlayerInput {
             time_ms: new_time,
             delta_ms: new_delta,
-            inputs: HashSet::default(),
+            inputs: Default::default(),
             camera: Transform::default(),
             predicted_position: Vec3::default(),
             predicted_velocity: Vec3::default(),

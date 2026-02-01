@@ -1,4 +1,3 @@
-use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +7,7 @@ use crate::physics::MovementMode;
 use super::PlayerId;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy, Eq, Hash)]
+#[repr(u8)]
 pub enum TransmittableAction {
     MoveForward,
     MoveBackward,
@@ -18,6 +18,22 @@ pub enum TransmittableAction {
     ToggleFlyMode,
     Hit,
     Modify,
+}
+
+/// Bitflag representation of player actions for compact storage and fast checks.
+#[derive(Serialize, Deserialize, Default, PartialEq, Eq, Debug, Clone, Copy)]
+pub struct ActionMask(pub u16);
+
+impl ActionMask {
+    #[inline]
+    pub fn insert(&mut self, action: TransmittableAction) {
+        self.0 |= 1 << (action as u16);
+    }
+
+    #[inline]
+    pub fn contains(&self, action: TransmittableAction) -> bool {
+        (self.0 & (1 << (action as u16))) != 0
+    }
 }
 
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug, Clone)]
@@ -50,7 +66,7 @@ pub struct ServerToClientPlayerUpdate {
 pub struct ClientToServerPlayerInput {
     pub time_ms: u64,
     pub delta_ms: u64,
-    pub inputs: HashSet<TransmittableAction>,
+    pub inputs: ActionMask,
     pub camera: Transform,
     pub hotbar_slot: u32,
     pub predicted_position: Vec3,

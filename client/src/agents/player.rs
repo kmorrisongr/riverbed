@@ -1,19 +1,17 @@
-use crate::{
-    agents::{Velocity, AABB},
-    sounds::{on_item_get, BlockSoundCD, FootstepCD},
-};
-use bevy::{math::Vec3, prelude::*};
+use crate::sounds::{on_item_get, BlockSoundCD, FootstepCD};
+use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
+use shared::physics::DynamicPlayerPhysicsBundle;
 use shared::world::pos::pos2d::ColPos;
 use shared::world::pos::PlayerCol;
 use shared::{
     block::Block,
     items::{item_slots::ItemHolder, new_inventory, InventoryTrait, Item, Stack},
     world::{realm::Realm, BlockRayCastHit},
+    DEFAULT_SPAWN_POSITION,
 };
-use shared::{DEFAULT_SPAWN_POSITION, PLAYER_AABB};
 
-use super::{block_action::BlockActionPlugin, key_binds::KeyBinds, Crouching, SteppingOn, Walking};
+use super::{block_action::BlockActionPlugin, key_binds::KeyBinds, Crouching};
 pub const HOTBAR_SLOTS: usize = 8;
 
 pub struct PlayerPlugin;
@@ -54,21 +52,21 @@ pub fn spawn_player(mut commands: Commands, key_binds: Res<KeyBinds>) {
     inventory.try_add(Stack::Some(Item::Block(Block::Smelter), 1));
     inventory.try_add(Stack::Some(Item::Coal, 20));
     inventory.try_add(Stack::Some(Item::IronOre, 50));
+    let transform = Transform {
+        translation: DEFAULT_SPAWN_POSITION,
+        ..default()
+    };
     commands
         .spawn((
-            Transform {
-                translation: DEFAULT_SPAWN_POSITION,
-                ..default()
-            },
+            transform,
             Visibility::default(),
             realm,
-            AABB(PLAYER_AABB),
-            Velocity(Vec3::default()),
+            DynamicPlayerPhysicsBundle::from_transform(&transform, realm),
             TargetBlock(None),
             ItemHolder::Inventory(inventory),
             PlayerControlled,
+            Crouching(false),
         ))
-        .insert((Walking, SteppingOn(Block::Air), Crouching(false)))
         .insert(SpatialListener::new(0.3))
         .insert((FootstepCD(0.), BlockSoundCD(0.)))
         .insert(InputMap::new([

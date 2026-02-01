@@ -1,13 +1,13 @@
-use crate::agents::Velocity;
 use crate::world::ClientWorldMap;
 use crate::Block;
 use crate::{
-    agents::{PlayerControlled, PlayerSpawn, AABB},
+    agents::{PlayerControlled, PlayerSpawn},
     ui::CursorGrabbed,
 };
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use leafwing_input_manager::prelude::*;
+use shared::physics::LinearVelocity;
 use shared::world::realm::Realm;
 use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 
@@ -65,14 +65,20 @@ pub struct CameraSpawn;
 fn cam_setup(
     mut commands: Commands,
     mut cursor_options: Query<&mut CursorOptions>,
-    player_query: Query<(Entity, &AABB), With<PlayerControlled>>,
+    player_query: Query<Entity, With<PlayerControlled>>,
 ) {
+    use shared::physics::{PLAYER_CAPSULE_HEIGHT, PLAYER_CAPSULE_RADIUS};
+
     let input_map = InputMap::default().with_dual_axis(CameraMovement::Pan, MouseMove::default());
-    let (player, aabb) = player_query.single().unwrap();
+    let player = player_query.single().unwrap();
+
+    // Position camera at eye level (top of capsule minus a small offset)
+    let eye_height = PLAYER_CAPSULE_HEIGHT / 2.0 + PLAYER_CAPSULE_RADIUS - 0.05;
+
     let cam = commands
         .spawn((
             Camera3d::default(),
-            Transform::from_xyz(aabb.0.x / 2., aabb.0.y - 0.05, aabb.0.z / 2.).looking_at(
+            Transform::from_xyz(0.0, eye_height, 0.0).looking_at(
                 Vec3 {
                     x: 0.,
                     y: 0.,
@@ -104,14 +110,14 @@ fn cam_setup(
 
 fn adaptative_fov(
     cam_query: Single<(&Transform, &mut Projection)>,
-    player_query: Single<&Velocity, With<PlayerControlled>>,
+    player_query: Single<&LinearVelocity, With<PlayerControlled>>,
     time: Res<Time>,
 ) {
-    let velocity = player_query.into_inner();
+    let linear_velocity = player_query.into_inner();
     let (transform, mut perspective) = cam_query.into_inner();
     // Adjust the FOV based on the player's speed
     if let Projection::Perspective(projection) = &mut *perspective {
-        let speed = transform.rotation.mul_vec3(-Vec3::Z).dot(velocity.0);
+        let speed = transform.rotation.mul_vec3(-Vec3::Z).dot(linear_velocity.0);
         let target_fov = FRAC_PI_4 * (speed / 10.0).clamp(1.0, 2.0);
         projection.fov = projection.fov.lerp(target_fov, time.delta_secs() * 4.0);
     }

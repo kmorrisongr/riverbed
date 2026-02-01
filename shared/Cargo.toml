@@ -7,10 +7,13 @@ edition = "2021"
 logging = []
 
 [dependencies]
+avian3d = { workspace = true }
 bevy = { workspace = true }
 bevy_renet = { workspace = true }
+binary-greedy-meshing = { workspace = true }
 bincode = { workspace = true }
 cfg-if = { workspace = true }
+crossbeam = { workspace = true }
 hashbrown = { workspace = true }
 itertools = { workspace = true }
 json5 = { workspace = true }

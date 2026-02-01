@@ -11,7 +11,7 @@ use shared::{
             pos2d::{chunks_in_col, BlockPos2d, ColPos, ColedPos},
             pos3d::{BlockPos, ChunkPos, ChunkedPos},
         },
-        BlockAccess, CHUNKP_S1, CHUNK_S1, MAX_HEIGHT, Y_CHUNKS,
+        BlockAccess, ColumnUnloader, CHUNKP_S1, CHUNK_S1, MAX_HEIGHT, Y_CHUNKS,
     },
 };
 use std::sync::Arc;
@@ -255,6 +255,12 @@ impl VoxelWorld {
     }
 }
 
+impl ColumnUnloader for VoxelWorld {
+    fn unload_column_impl(&self, col: ColPos) {
+        self.unload_col(col);
+    }
+}
+
 impl BlockAccess for VoxelWorld {
     fn get_block_safe(&self, pos: BlockPos) -> Block {
         if pos.y < 0 || pos.y >= MAX_HEIGHT as i32 {
@@ -266,5 +272,16 @@ impl BlockAccess for VoxelWorld {
 
     fn is_chunk_loaded(&self, chunk_pos: ChunkPos) -> bool {
         self.chunks.contains_key(&chunk_pos)
+    }
+}
+
+impl shared::meshing::ChunkProvider for VoxelWorld {
+    fn get_chunk(&self, pos: ChunkPos) -> Option<Arc<Chunk>> {
+        // Note: Server chunks use RwLock<Chunk> directly (not COW) because
+        // terrain generation performs heavy mutation. We clone here to ensure
+        // the collider worker gets a consistent snapshot.
+        self.chunks
+            .get(&pos)
+            .map(|c| Arc::new(c.value().read().clone()))
     }
 }

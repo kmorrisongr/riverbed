@@ -7,13 +7,7 @@ use crate::world::{
     terrain_thread::{assign_player_col, on_unload_col, send_player_pos_update, setup_load_thread},
 };
 use bevy::prelude::*;
-use shared::world::{
-    block_entities::BlockEntities,
-    pos::{pos2d::ColPos, pos3d::ChunkPos},
-};
-
-#[derive(Message)]
-pub struct ColUnloadEvent(pub ColPos);
+use shared::world::{block_entities::BlockEntities, pos::pos3d::ChunkPos, ColUnloadEvent};
 
 #[derive(Message)]
 pub struct ChunkChanged(pub ChunkPos);

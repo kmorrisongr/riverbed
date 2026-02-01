@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::world::pos::pos2d::ColPos;
 use crate::world::pos::pos3d::BlockPos;
 
 pub mod block_access;
@@ -27,6 +28,30 @@ pub const Y_CHUNKS: usize = MAX_HEIGHT / CHUNK_S1;
 /// World seed resource, used for world generation
 #[derive(Resource, Default, Debug, Clone, Copy)]
 pub struct WorldSeed(pub u32);
+
+/// Event sent when a column (vertical stack of chunks) is unloaded.
+///
+/// Used by both client and server to notify systems that need to clean up
+/// resources associated with a column (e.g., mesh entities, colliders, block entities).
+#[derive(Message, Debug, Clone, Copy)]
+pub struct ColUnloadEvent(pub ColPos);
+
+/// Trait for types that can unload a column of chunks.
+/// Implementers provide the actual unload logic; the helper `unload_column`
+/// will emit the unload event and then call this implementation.
+pub trait ColumnUnloader {
+    fn unload_column_impl(&self, col: ColPos);
+}
+
+/// Emit a `ColUnloadEvent` and run the implementer's unload logic.
+pub fn unload_column<U: ColumnUnloader>(
+    unloader: &U,
+    col: ColPos,
+    writer: &mut MessageWriter<ColUnloadEvent>,
+) {
+    writer.write(ColUnloadEvent(col));
+    unloader.unload_column_impl(col);
+}
 
 pub struct BlockRayCastHit {
     pub pos: BlockPos,

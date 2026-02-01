@@ -1,13 +1,13 @@
 use bevy::prelude::*;
 use bevy_renet::renet::RenetClient;
 use shared::logging::logging::LogEvent;
+use shared::meshing::ChunkColliderRebuildRequest;
 use shared::messages::{
     ServerToClientItemStackUpdate, ServerToClientMessage, ServerToClientPlayerSpawn,
     ServerToClientPlayerUpdate,
 };
 use shared::STC_AUTH_CHANNEL;
 
-use crate::network::models::client_chunk::ClientChunk;
 use crate::render::MeshOrderSender;
 use crate::world::ClientWorldMap;
 
@@ -21,6 +21,7 @@ pub fn update_world_from_network(
     ev_item_stacks_update: &mut MessageWriter<ServerToClientItemStackUpdate>,
     ev_player_update: &mut MessageWriter<ServerToClientPlayerUpdate>,
     ev_log_events: &mut MessageWriter<LogEvent>,
+    ev_collider_rebuild: &mut MessageWriter<ChunkColliderRebuildRequest>,
 ) {
     while let Some(Ok(message)) = client.receive_game_message_except_channel(STC_AUTH_CHANNEL) {
         match message {
@@ -30,12 +31,14 @@ pub fn update_world_from_network(
                 if chunk_count > 0 {
                     if let (Some(world_map), Some(mesh_sender)) = (&world_map, &mesh_order_sender) {
                         for (chunk_position, chunk) in world_update.new_map {
-                            let client_chunk = ClientChunk::from(chunk);
-                            world_map.insert_chunk(chunk_position, client_chunk);
+                            world_map.insert_chunk(chunk_position, chunk);
 
                             if mesh_sender.0.send(chunk_position).is_err() {
                                 warn!("Failed to send mesh order for chunk {:?}", chunk_position);
                             }
+
+                            ev_collider_rebuild
+                                .write(ChunkColliderRebuildRequest::new(chunk_position));
                         }
 
                         debug!("Received and processed {} chunks from server", chunk_count);
